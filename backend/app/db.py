@@ -174,7 +174,7 @@ def init_db() -> None:
     schema stabilizes.
     """
     # Import models so they register with Base.metadata.
-    from app.models import habit, journal, subscription, user  # noqa: F401
+    from app.models import account, budget, finance, habit, journal, subscription, user  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

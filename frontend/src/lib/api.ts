@@ -42,6 +42,131 @@ export type AiPingResponse = {
 };
 
 // ---------------------------------------------------------------------------
+// Finance types
+// ---------------------------------------------------------------------------
+export type TransactionType = 'income' | 'expense' | 'transfer';
+
+export type Transaction = {
+  id: string;
+  type: TransactionType;
+  amount: number;
+  currency: string;
+  date: string; // YYYY-MM-DD
+  category: string | null;
+  account: string | null;
+  payee: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TransactionIn = {
+  type: TransactionType;
+  amount: number;
+  currency?: string;
+  date: string;
+  category?: string | null;
+  account?: string | null;
+  payee?: string | null;
+  notes?: string | null;
+};
+
+export type CategoryStat = { category: string; total: number; count: number };
+
+export type BudgetProgress = {
+  category: string | null;
+  budget: number;
+  spent: number;
+  pct: number;
+};
+
+export type MonthlySummary = {
+  year: number;
+  month: number;
+  total_income: number;
+  total_expense: number;
+  net: number;
+  by_category: CategoryStat[];
+  transaction_count: number;
+  budget_overall: BudgetProgress | null;
+  budget_by_category: BudgetProgress[];
+};
+
+export type FinanceMeta = {
+  expense_categories: string[];
+  income_categories: string[];
+  account_suggestions: string[];
+  credit_card_options: string[];
+  category_emoji: Record<string, string>;
+};
+
+// ---------------------------------------------------------------------------
+// Account types
+// ---------------------------------------------------------------------------
+export type AccountType = 'savings' | 'credit_card' | 'debit_card' | 'wallet' | 'upi' | 'cash';
+
+export type Account = {
+  id: string;
+  name: string;
+  type: AccountType;
+  bank: string | null;
+  last4: string | null;
+  credit_limit: number | null;
+  benefits_json: string | null;
+  color: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AccountIn = {
+  name: string;
+  type?: AccountType;
+  bank?: string | null;
+  last4?: string | null;
+  credit_limit?: number | null;
+  benefits_json?: string | null;
+  color?: string | null;
+};
+
+export type AccountPatch = Partial<AccountIn> & { is_active?: boolean };
+
+export type CardBenefits = {
+  card_name: string;
+  perks: string[];
+  cashback: Record<string, number>;
+  annual_fee?: number;
+  source: 'static' | 'unknown';
+};
+
+export type CardTipResponse = {
+  tip: string | null;
+  better_card: string | null;
+  cashback_rate: number | null;
+  current_rate: number | null;
+};
+
+// ---------------------------------------------------------------------------
+// Budget types
+// ---------------------------------------------------------------------------
+export type BudgetOut = {
+  id: string;
+  year: number | null;
+  month: number | null;
+  category: string | null;
+  amount: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BudgetIn = {
+  year?: number | null;
+  month?: number | null;
+  category?: string | null;
+  amount: number;
+};
+
+// ---------------------------------------------------------------------------
 // Journal types — mirror of app/schemas/journal.py
 // ---------------------------------------------------------------------------
 export type MoodCode = {
@@ -431,6 +556,63 @@ export const api = {
       request<{ response: string }>('/ai/chat', {
         method: 'POST',
         body: JSON.stringify({ messages }),
+      }),
+  },
+
+  finance: {
+    meta: () => request<FinanceMeta>('/finance/meta'),
+    list: (year?: number, month?: number) => {
+      const params = new URLSearchParams();
+      if (year !== undefined) params.set('year', String(year));
+      if (month !== undefined) params.set('month', String(month));
+      const qs = params.toString();
+      return request<Transaction[]>(`/finance/transactions${qs ? `?${qs}` : ''}`);
+    },
+    create: (payload: TransactionIn) =>
+      request<Transaction>('/finance/transactions', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    update: (id: string, patch: Partial<TransactionIn>) =>
+      request<Transaction>(`/finance/transactions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    delete: (id: string) =>
+      request<void>(`/finance/transactions/${id}`, { method: 'DELETE' }),
+    summary: (year: number, month: number) =>
+      request<MonthlySummary>(`/finance/summary/${year}/${month}`),
+    insights: () =>
+      request<{ insights: string[]; model: string }>('/finance/insights', { method: 'POST' }),
+    // Budgets
+    listBudgets: (year?: number, month?: number) => {
+      const params = new URLSearchParams();
+      if (year !== undefined) params.set('year', String(year));
+      if (month !== undefined) params.set('month', String(month));
+      const qs = params.toString();
+      return request<BudgetOut[]>(`/finance/budgets${qs ? `?${qs}` : ''}`);
+    },
+    upsertBudget: (payload: BudgetIn) =>
+      request<BudgetOut>('/finance/budgets', { method: 'POST', body: JSON.stringify(payload) }),
+    deleteBudget: (id: string) =>
+      request<void>(`/finance/budgets/${id}`, { method: 'DELETE' }),
+  },
+
+  accounts: {
+    list: (includeInactive = false) =>
+      request<Account[]>(`/accounts${includeInactive ? '?include_inactive=true' : ''}`),
+    create: (payload: AccountIn) =>
+      request<Account>('/accounts', { method: 'POST', body: JSON.stringify(payload) }),
+    get: (id: string) => request<Account>(`/accounts/${id}`),
+    update: (id: string, patch: AccountPatch) =>
+      request<Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+    delete: (id: string) => request<void>(`/accounts/${id}`, { method: 'DELETE' }),
+    cardBenefits: (cardName: string) =>
+      request<CardBenefits>(`/accounts/card-benefits/${encodeURIComponent(cardName)}`),
+    cardTip: (payload: { category: string; account: string; amount: number }) =>
+      request<CardTipResponse>('/accounts/card-tip', {
+        method: 'POST',
+        body: JSON.stringify(payload),
       }),
   },
 

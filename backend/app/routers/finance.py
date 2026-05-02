@@ -1,0 +1,341 @@
+"""Finance router — transactions, budgets, monthly summary, AI insights."""
+from __future__ import annotations
+
+from datetime import date as date_cls
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import extract
+from sqlalchemy.orm import Session
+
+from app.db import get_db
+from app.models.budget import Budget
+from app.models.finance import Transaction
+from app.schemas.budget import BudgetIn, BudgetOut, BudgetPatch, BudgetProgress
+from app.schemas.finance import (
+    ACCOUNT_SUGGESTIONS,
+    CATEGORY_EMOJI,
+    CREDIT_CARD_OPTIONS,
+    EXPENSE_CATEGORIES,
+    INCOME_CATEGORIES,
+    CategoryStat,
+    FinanceMeta,
+    MonthlySummary,
+    TransactionIn,
+    TransactionOut,
+    TransactionPatch,
+)
+
+router = APIRouter(prefix="/api/v1/finance", tags=["finance"])
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _budget_for(db: Session, year: int, month: int, category: str | None) -> float | None:
+    """Return the applicable budget amount for (year, month, category).
+
+    Lookup order:
+      1. Exact row: year=year, month=month, category=category
+      2. Recurring row: year=NULL, month=NULL, category=category
+    """
+    b = (
+        db.query(Budget)
+        .filter(Budget.year == year, Budget.month == month, Budget.category == category)
+        .first()
+    )
+    if b:
+        return float(b.amount)
+    b = (
+        db.query(Budget)
+        .filter(Budget.year.is_(None), Budget.month.is_(None), Budget.category == category)
+        .first()
+    )
+    return float(b.amount) if b else None
+
+
+# ---------------------------------------------------------------------------
+# Meta — category lists + emoji map
+# ---------------------------------------------------------------------------
+@router.get("/meta", response_model=FinanceMeta)
+def meta():
+    return FinanceMeta(
+        expense_categories=EXPENSE_CATEGORIES,
+        income_categories=INCOME_CATEGORIES,
+        account_suggestions=ACCOUNT_SUGGESTIONS,
+        credit_card_options=CREDIT_CARD_OPTIONS,
+        category_emoji=CATEGORY_EMOJI,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Transactions CRUD
+# ---------------------------------------------------------------------------
+@router.get("/transactions", response_model=list[TransactionOut])
+def list_transactions(
+    year: int | None = None,
+    month: int | None = None,
+    db: Session = Depends(get_db),
+):
+    q = db.query(Transaction)
+    if year is not None:
+        q = q.filter(extract("year", Transaction.date) == year)
+    if month is not None:
+        q = q.filter(extract("month", Transaction.date) == month)
+    return q.order_by(Transaction.date.desc(), Transaction.created_at.desc()).all()
+
+
+@router.post("/transactions", response_model=TransactionOut, status_code=201)
+def create_transaction(payload: TransactionIn, db: Session = Depends(get_db)):
+    t = Transaction(**payload.model_dump())
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return t
+
+
+@router.patch("/transactions/{txn_id}", response_model=TransactionOut)
+def update_transaction(txn_id: str, patch: TransactionPatch, db: Session = Depends(get_db)):
+    t = db.get(Transaction, txn_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    for k, v in patch.model_dump(exclude_unset=True).items():
+        setattr(t, k, v)
+    db.commit()
+    db.refresh(t)
+    return t
+
+
+@router.delete("/transactions/{txn_id}", status_code=204)
+def delete_transaction(txn_id: str, db: Session = Depends(get_db)):
+    t = db.get(Transaction, txn_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    db.delete(t)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Budgets CRUD
+# ---------------------------------------------------------------------------
+@router.get("/budgets", response_model=list[BudgetOut])
+def list_budgets(
+    year: int | None = None,
+    month: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return all budgets. Optionally filter to rows that apply to year/month
+    (returns both exact-match rows and recurring rows)."""
+    q = db.query(Budget)
+    if year is not None and month is not None:
+        from sqlalchemy import or_, and_
+        q = q.filter(
+            or_(
+                and_(Budget.year == year, Budget.month == month),
+                and_(Budget.year.is_(None), Budget.month.is_(None)),
+            )
+        )
+    return q.order_by(Budget.year.asc(), Budget.month.asc(), Budget.category.asc()).all()
+
+
+@router.post("/budgets", response_model=BudgetOut, status_code=201)
+def upsert_budget(payload: BudgetIn, db: Session = Depends(get_db)):
+    """Create or replace a budget entry for the given year/month/category combo."""
+    existing = (
+        db.query(Budget)
+        .filter(
+            Budget.year == payload.year,
+            Budget.month == payload.month,
+            Budget.category == payload.category,
+        )
+        .first()
+    )
+    if existing:
+        existing.amount = payload.amount  # type: ignore[assignment]
+        db.commit()
+        db.refresh(existing)
+        return existing
+    b = Budget(**payload.model_dump())
+    db.add(b)
+    db.commit()
+    db.refresh(b)
+    return b
+
+
+@router.patch("/budgets/{budget_id}", response_model=BudgetOut)
+def update_budget(budget_id: str, patch: BudgetPatch, db: Session = Depends(get_db)):
+    b = db.get(Budget, budget_id)
+    if b is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    for k, v in patch.model_dump(exclude_unset=True).items():
+        setattr(b, k, v)
+    db.commit()
+    db.refresh(b)
+    return b
+
+
+@router.delete("/budgets/{budget_id}", status_code=204)
+def delete_budget(budget_id: str, db: Session = Depends(get_db)):
+    b = db.get(Budget, budget_id)
+    if b is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    db.delete(b)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Monthly summary  (now includes budget progress)
+# ---------------------------------------------------------------------------
+@router.get("/summary/{year}/{month}", response_model=MonthlySummary)
+def monthly_summary(year: int, month: int, db: Session = Depends(get_db)):
+    txns = (
+        db.query(Transaction)
+        .filter(
+            extract("year", Transaction.date) == year,
+            extract("month", Transaction.date) == month,
+        )
+        .all()
+    )
+
+    total_income = sum(t.amount for t in txns if t.type == "income")
+    total_expense = sum(t.amount for t in txns if t.type == "expense")
+
+    # Build expense breakdown by category.
+    cat_map: dict[str, dict] = {}
+    for t in txns:
+        if t.type != "expense":
+            continue
+        cat = t.category or "Other"
+        if cat not in cat_map:
+            cat_map[cat] = {"total": 0.0, "count": 0}
+        cat_map[cat]["total"] = float(cat_map[cat]["total"]) + t.amount
+        cat_map[cat]["count"] = int(cat_map[cat]["count"]) + 1
+
+    by_category = sorted(
+        [
+            CategoryStat(
+                category=k,
+                total=round(float(v["total"]), 2),
+                count=int(v["count"]),
+            )
+            for k, v in cat_map.items()
+        ],
+        key=lambda x: -x.total,
+    )
+
+    # Budget progress — overall
+    overall_budget_amt = _budget_for(db, year, month, None)
+    budget_overall: BudgetProgress | None = None
+    if overall_budget_amt is not None:
+        budget_overall = BudgetProgress(
+            category=None,
+            budget=overall_budget_amt,
+            spent=round(total_expense, 2),
+            pct=round(total_expense / overall_budget_amt * 100, 1) if overall_budget_amt > 0 else 0.0,
+        )
+
+    # Budget progress — per category
+    budget_by_category: list[BudgetProgress] = []
+    for cs in by_category:
+        bamt = _budget_for(db, year, month, cs.category)
+        if bamt is not None:
+            budget_by_category.append(
+                BudgetProgress(
+                    category=cs.category,
+                    budget=bamt,
+                    spent=cs.total,
+                    pct=round(cs.total / bamt * 100, 1) if bamt > 0 else 0.0,
+                )
+            )
+
+    return MonthlySummary(
+        year=year,
+        month=month,
+        total_income=round(total_income, 2),
+        total_expense=round(total_expense, 2),
+        net=round(total_income - total_expense, 2),
+        by_category=by_category,
+        transaction_count=len(txns),
+        budget_overall=budget_overall,
+        budget_by_category=budget_by_category,
+    )
+
+
+# ---------------------------------------------------------------------------
+# AI insights
+# ---------------------------------------------------------------------------
+@router.post("/insights")
+async def finance_insights(db: Session = Depends(get_db)):
+    """Generate AI insights comparing current vs previous month spending."""
+    import re
+    from datetime import date
+
+    from app.services import llm_client
+    from app.services.llm_client import LLMError
+
+    today = date.today()
+    cur_year, cur_month = today.year, today.month
+    prev_month = cur_month - 1 if cur_month > 1 else 12
+    prev_year = cur_year if cur_month > 1 else cur_year - 1
+
+    def _load(y: int, m: int) -> list[Transaction]:
+        return (
+            db.query(Transaction)
+            .filter(
+                extract("year", Transaction.date) == y,
+                extract("month", Transaction.date) == m,
+            )
+            .all()
+        )
+
+    cur = _load(cur_year, cur_month)
+    prev = _load(prev_year, prev_month)
+
+    if not cur and not prev:
+        return {"insights": [], "model": "chat"}
+
+    def _summarise(txns: list[Transaction], label: str) -> str:
+        if not txns:
+            return f"{label}: no data"
+        income = sum(t.amount for t in txns if t.type == "income")
+        expense = sum(t.amount for t in txns if t.type == "expense")
+        cats: dict[str, float] = {}
+        for t in txns:
+            if t.type == "expense":
+                c = t.category or "Other"
+                cats[c] = cats.get(c, 0) + t.amount
+        top = sorted(cats.items(), key=lambda x: -x[1])[:5]
+        top_str = ", ".join(f"{c}: {v:.0f}" for c, v in top)
+        return (
+            f"{label}: income={income:.0f}, expense={expense:.0f}, "
+            f"net={income - expense:.0f}. Top categories: {top_str}"
+        )
+
+    context = (
+        _summarise(cur, f"{cur_year}-{cur_month:02d} (this month)")
+        + "\n"
+        + _summarise(prev, f"{prev_year}-{prev_month:02d} (last month)")
+    )
+
+    system = (
+        "You are analysing someone's personal finances. "
+        "Give 3–4 short, specific insights: spending trends, categories that increased or decreased, "
+        "savings rate, anything worth acting on. "
+        "Output ONLY a numbered list — no headers, no preamble."
+    )
+
+    try:
+        raw = await llm_client.generate(
+            context, purpose="insights", system=system, temperature=0.4, max_tokens=400
+        )
+    except LLMError:
+        return {"insights": [], "model": "chat"}
+
+    insights: list[str] = []
+    for line in (raw or "").splitlines():
+        line = re.sub(r"^\d+[\.\)]\s*", "", line.strip()).strip()
+        if len(line) > 10:
+            insights.append(line)
+        if len(insights) >= 5:
+            break
+
+    return {"insights": insights, "model": "chat"}

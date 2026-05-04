@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import init_db
-from app.routers import accounts, ai, finance, habit, health, journal, subscription
+from app.routers import accounts, ai, finance, habit, health, journal, settings, subscription
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,9 +28,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()
+    cfg = get_settings()
     app = FastAPI(
-        title=settings.app_name,
+        title=cfg.app_name,
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
         allow_origins=[
             "http://localhost:5173",
             "http://127.0.0.1:5173",
-            f"http://{settings.app_host}:{settings.app_port}",
+            f"http://{cfg.app_host}:{cfg.app_port}",
         ],
         allow_credentials=True,
         allow_methods=["*"],
@@ -55,11 +55,12 @@ def create_app() -> FastAPI:
     app.include_router(subscription.router)
     app.include_router(finance.router)
     app.include_router(accounts.router)
+    app.include_router(settings.router)
 
     @app.get("/")
     def root():
         return {
-            "app": settings.app_name,
+            "app": cfg.app_name,
             "docs": "/docs",
             "health": "/api/v1/health",
         }

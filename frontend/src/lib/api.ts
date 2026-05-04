@@ -475,7 +475,38 @@ export type SubscriptionStatsResponse = {
 // ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Settings / AI provider types
+// ---------------------------------------------------------------------------
+export type ProviderPreset = {
+  label: string;
+  emoji: string;
+  api_base: string;
+  needs_key: boolean;
+  is_anthropic: boolean;
+  suggested_chat: string[];
+  suggested_embed: string | null;
+  embed_supported: boolean;
+};
+
+export type LLMTestResult = {
+  ok: boolean;
+  provider: string;
+  model: string;
+  response: string | null;
+  error: string | null;
+};
+
 export const api = {
+  settings: {
+    getAll: () => request<Record<string, string>>('/settings'),
+    getProviders: () => request<Record<string, ProviderPreset>>('/settings/providers'),
+    update: (settings: Record<string, string>) =>
+      request<{ ok: boolean }>('/settings', { method: 'PUT', body: JSON.stringify({ settings }) }),
+    testLLM: () => request<LLMTestResult>('/settings/test-llm', { method: 'POST' }),
+    listModels: () => request<{ models: string[]; error?: string }>('/settings/models'),
+  },
+
   health: () => request<HealthResponse>('/health'),
   aiPing: (
     prompt: string,

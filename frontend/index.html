@@ -9,6 +9,11 @@
     <title>North OS</title>
   </head>
   <body>
+    <!-- Netlify Forms bot detection — must live in static HTML, not JSX -->
+    <form name="north-os-download" data-netlify="true" hidden>
+      <input type="email" name="email" />
+    </form>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

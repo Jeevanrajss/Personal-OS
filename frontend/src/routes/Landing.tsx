@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+
+const GITHUB_URL = 'https://github.com/Jeevanrajss/Personal-OS';
 
 const FEATURES = [
   {
@@ -52,10 +54,193 @@ const PROVIDERS = [
   { name: 'Custom', label: 'Any OpenAI-compat', highlight: false },
 ];
 
+/* ─── Email capture modal ─────────────────────────────────────────── */
+function EmailModal({ onClose }: { onClose: () => void }) {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'done'>('idle');
+  const [error, setError] = useState('');
+
+  function goToGitHub() {
+    window.open(GITHUB_URL, '_blank', 'noopener,noreferrer');
+    onClose();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) { goToGitHub(); return; }
+
+    setStatus('submitting');
+    setError('');
+
+    try {
+      // Netlify Forms — posts form data to the current page origin
+      const body = new URLSearchParams({
+        'form-name': 'north-os-download',
+        email: email.trim(),
+      });
+      const res = await fetch('/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+      if (!res.ok) throw new Error('Network error');
+      setStatus('done');
+      setTimeout(goToGitHub, 1200);
+    } catch {
+      // Even on error, still let them download
+      goToGitHub();
+    }
+  }
+
+  const overlay: React.CSSProperties = {
+    position: 'fixed', inset: 0, zIndex: 200,
+    background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: '24px',
+  };
+  const card: React.CSSProperties = {
+    width: '100%', maxWidth: '440px',
+    borderRadius: '20px', padding: '40px',
+    background: '#13131a',
+    border: '1px solid rgba(107,124,230,0.25)',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+    position: 'relative',
+  };
+
+  return (
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      {/* Netlify form detection — hidden, required for Netlify to register the form */}
+      <form name="north-os-download" data-netlify="true" hidden>
+        <input type="email" name="email" />
+      </form>
+
+      <div style={card}>
+        {/* Close */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: '16px', right: '16px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'rgba(255,255,255,0.3)', fontSize: '18px', lineHeight: 1,
+            padding: '4px 8px',
+          }}
+          aria-label="Close"
+        >×</button>
+
+        {status === 'done' ? (
+          <div style={{ textAlign: 'center', paddingTop: '8px' }}>
+            <div style={{ fontSize: '36px', marginBottom: '16px' }}>🎉</div>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'white', marginBottom: '8px', letterSpacing: '-0.02em' }}>
+              You're in!
+            </h3>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.45)', lineHeight: '1.6' }}>
+              We'll notify you when North OS updates.<br />Opening GitHub now…
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Icon */}
+            <div style={{
+              width: '44px', height: '44px', borderRadius: '12px', marginBottom: '20px',
+              background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '20px', fontWeight: '700', color: 'white',
+            }}>N</div>
+
+            <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'white', marginBottom: '8px', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+              Get notified of updates
+            </h3>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.45)', lineHeight: '1.65', marginBottom: '28px' }}>
+              Drop your email and we'll let you know when new features, fixes, or major releases land. No spam — only meaningful updates.
+            </p>
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoFocus
+                style={{
+                  width: '100%', padding: '12px 16px', borderRadius: '10px',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'white', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+                }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'rgba(107,124,230,0.5)')}
+                onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
+              />
+              {error && <p style={{ fontSize: '12px', color: '#f87171', margin: 0 }}>{error}</p>}
+
+              <button
+                type="submit"
+                disabled={status === 'submitting'}
+                style={{
+                  padding: '12px', borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
+                  border: 'none', color: 'white', fontWeight: '600', fontSize: '14px',
+                  cursor: status === 'submitting' ? 'not-allowed' : 'pointer',
+                  opacity: status === 'submitting' ? 0.7 : 1,
+                }}
+              >
+                {status === 'submitting' ? 'Saving…' : 'Notify me & Download →'}
+              </button>
+
+              <button
+                type="button"
+                onClick={goToGitHub}
+                style={{
+                  padding: '10px', borderRadius: '10px',
+                  background: 'none', border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.35)', fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.35)')}
+              >
+                Skip — just take me to GitHub
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Download button (reusable) ──────────────────────────────────── */
+function DownloadButton({
+  onDownload, style = {}, size = 'md',
+}: {
+  onDownload: () => void;
+  style?: React.CSSProperties;
+  size?: 'md' | 'lg';
+}) {
+  const pad = size === 'lg' ? '13px 28px' : '10px 22px';
+  const fs = size === 'lg' ? '15px' : '14px';
+  return (
+    <button
+      onClick={onDownload}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        padding: pad, borderRadius: '10px',
+        background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
+        border: 'none', color: 'white', fontWeight: '600', fontSize: fs,
+        cursor: 'pointer', letterSpacing: '-0.01em',
+        ...style,
+      }}
+    >
+      ↓ Download Free
+    </button>
+  );
+}
+
+/* ─── Main landing page ───────────────────────────────────────────── */
 export function Landing() {
+  const [showModal, setShowModal] = useState(false);
+
+  function openDownload() { setShowModal(true); }
+
   return (
     <div style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
       className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
+
+      {showModal && <EmailModal onClose={() => setShowModal(false)} />}
 
       {/* ── Ambient glow ── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -99,20 +284,13 @@ export function Landing() {
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>
               Privacy
             </a>
-            <a href="https://github.com/Jeevanrajss/Personal-OS" target="_blank" rel="noopener noreferrer"
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', textDecoration: 'none' }}
               onMouseEnter={e => (e.currentTarget.style.color = 'white')}
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.5)')}>
               GitHub
             </a>
-            <Link to="/app" style={{
-              fontSize: '13px', fontWeight: '500',
-              padding: '6px 16px', borderRadius: '8px',
-              background: 'rgba(107,124,230,0.15)', border: '1px solid rgba(107,124,230,0.3)',
-              color: '#9b8cff', textDecoration: 'none',
-            }}>
-              Launch App →
-            </Link>
+            <DownloadButton onDownload={openDownload} style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '8px' }} />
           </div>
         </div>
       </nav>
@@ -161,26 +339,18 @@ export function Landing() {
 
         {/* CTAs */}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="https://github.com/Jeevanrajss/Personal-OS" target="_blank" rel="noopener noreferrer"
+          <DownloadButton onDownload={openDownload} size="lg" />
+          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '8px',
               padding: '13px 28px', borderRadius: '10px',
-              background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
-              color: 'white', fontWeight: '600', fontSize: '15px',
-              textDecoration: 'none', letterSpacing: '-0.01em',
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.04)',
+              color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: '15px',
+              textDecoration: 'none',
             }}>
-            ↓ Download Free
+            View on GitHub
           </a>
-          <Link to="/app" style={{
-            display: 'inline-flex', alignItems: 'center', gap: '8px',
-            padding: '13px 28px', borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: 'rgba(255,255,255,0.04)',
-            color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: '15px',
-            textDecoration: 'none',
-          }}>
-            Launch App →
-          </Link>
         </div>
 
         <p style={{ marginTop: '20px', fontSize: '12px', color: 'rgba(255,255,255,0.25)' }}>
@@ -339,7 +509,7 @@ export function Landing() {
             Start understanding yourself.
           </h2>
           <p style={{ fontSize: '17px', color: 'rgba(255,255,255,0.4)', marginBottom: '40px', maxWidth: '440px', margin: '0 auto 40px', lineHeight: '1.65' }}>
-            Free, open source, and runs entirely on your machine. Two commands to install.
+            Free, open source, and runs entirely on your machine. One command to install.
           </p>
           <div style={{ display: 'inline-block', padding: '16px 24px', borderRadius: '12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '32px' }}>
             <code style={{ fontSize: '13px', fontFamily: 'monospace', color: 'rgba(155,140,255,0.9)', letterSpacing: '0.02em' }}>
@@ -347,26 +517,18 @@ export function Landing() {
             </code>
           </div>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a href="https://github.com/Jeevanrajss/Personal-OS" target="_blank" rel="noopener noreferrer"
+            <DownloadButton onDownload={openDownload} size="lg" />
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '8px',
                 padding: '13px 28px', borderRadius: '10px',
-                background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
-                color: 'white', fontWeight: '600', fontSize: '15px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.04)',
+                color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: '15px',
                 textDecoration: 'none',
               }}>
               View on GitHub
             </a>
-            <Link to="/app" style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '13px 28px', borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.04)',
-              color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: '15px',
-              textDecoration: 'none',
-            }}>
-              Launch App →
-            </Link>
           </div>
         </div>
       </section>
@@ -393,17 +555,14 @@ export function Landing() {
           <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)' }}>MIT License</span>
         </div>
         <div style={{ display: 'flex', gap: '24px' }}>
-          <a href="https://github.com/Jeevanrajss/Personal-OS" target="_blank" rel="noopener noreferrer"
+          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}>
             GitHub
           </a>
-          <a href="https://github.com/Jeevanrajss/Personal-OS/blob/main/README.md" target="_blank" rel="noopener noreferrer"
+          <a href={`${GITHUB_URL}/blob/main/README.md`} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}>
             Docs
           </a>
-          <Link to="/app" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.35)', textDecoration: 'none' }}>
-            Launch App
-          </Link>
         </div>
       </footer>
 

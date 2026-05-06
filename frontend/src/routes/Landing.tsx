@@ -91,8 +91,8 @@ const COMPAT = {
   ],
 };
 
-/* ─── Email capture modal — mandatory, no skip ────────────────────── */
-function EmailModal() {
+/* ─── Email capture modal ─────────────────────────────────────────── */
+function EmailModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('');
   const [touched, setTouched] = useState(false);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'done'>('idle');
@@ -139,17 +139,31 @@ function EmailModal() {
     background: '#13131a',
     border: '1px solid rgba(107,124,230,0.3)',
     boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+    position: 'relative',
   };
 
   return (
-    /* Intentionally no onClick on overlay — modal is mandatory */
-    <div style={overlay}>
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       {/* Netlify bot detection — hidden form required */}
       <form name="north-os-download" data-netlify="true" hidden>
         <input type="email" name="email" />
       </form>
 
       <div style={card}>
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: '16px', right: '16px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'rgba(255,255,255,0.3)', fontSize: '20px', lineHeight: 1,
+            padding: '4px 8px', borderRadius: '6px',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.3)')}
+          aria-label="Close"
+        >×</button>
+
         {status === 'done' ? (
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <div style={{ fontSize: '40px', marginBottom: '16px' }}>🎉</div>
@@ -258,7 +272,7 @@ export function Landing() {
     <div style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
       className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
 
-      {showModal && <EmailModal />}
+      {showModal && <EmailModal onClose={() => setShowModal(false)} />}
 
       {/* ── Ambient glow ── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">

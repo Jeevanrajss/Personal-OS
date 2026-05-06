@@ -29,6 +29,7 @@ _KEYWORD_MAP: list[tuple[list[str], str]] = [
     (["freelance", "project payment", "consulting", "invoice"], "Freelance"),
     (["dividend", "interest", "mutual fund", "sip", "equity", "stock", "zerodha", "groww", "coin", "trading"], "Investment"),
     (["gift", "present", "birthday transfer"], "Gift"),
+    (["split", "splitwise", "settle", "settlement", "reimbursement", "reimburse"], "Splits"),
 ]
 
 

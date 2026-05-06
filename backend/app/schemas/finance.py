@@ -32,6 +32,7 @@ INCOME_CATEGORIES = [
     "Freelance",
     "Investment",
     "Gift",
+    "Splits",
     "Other Income",
 ]
 
@@ -79,6 +80,7 @@ CATEGORY_EMOJI: dict[str, str] = {
     "Freelance": "💰",
     "Investment": "📈",
     "Gift": "🎁",
+    "Splits": "🤝",
     "Other Income": "💵",
 }
 

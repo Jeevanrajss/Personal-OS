@@ -159,12 +159,7 @@ function EmailModal() {
           </div>
         ) : (
           <>
-            <div style={{
-              width: '44px', height: '44px', borderRadius: '12px', marginBottom: '20px',
-              background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '20px', fontWeight: '700', color: 'white',
-            }}>N</div>
+            <img src="/favicon.png" alt="North OS" style={{ width: '44px', height: '44px', borderRadius: '12px', marginBottom: '20px' }} />
 
             <h3 style={{ fontSize: '20px', fontWeight: '700', color: 'white', marginBottom: '8px', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
               One last step
@@ -282,12 +277,7 @@ export function Landing() {
       }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '30px', height: '30px', borderRadius: '8px',
-              background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '14px', fontWeight: '700', color: 'white',
-            }}>N</div>
+            <img src="/favicon.png" alt="North OS" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />
             <span style={{ fontSize: '15px', fontWeight: '600', letterSpacing: '-0.01em' }}>North OS</span>
           </div>
 
@@ -577,12 +567,7 @@ export function Landing() {
         flexWrap: 'wrap', gap: '16px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '24px', height: '24px', borderRadius: '6px',
-            background: 'linear-gradient(135deg, #6b7ce6, #9b8cff)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '11px', fontWeight: '700', color: 'white',
-          }}>N</div>
+          <img src="/favicon.png" alt="North OS" style={{ width: '24px', height: '24px', borderRadius: '6px' }} />
           <span style={{ fontSize: '13px', fontWeight: '500', color: 'rgba(255,255,255,0.5)' }}>North OS</span>
           <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.2)' }}>·</span>
           <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)' }}>MIT License</span>

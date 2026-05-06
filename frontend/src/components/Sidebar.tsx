@@ -28,9 +28,7 @@ export function Sidebar({ collapsed, onToggle }: Props) {
       )}>
         {/* Logo mark */}
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 shrink-0 rounded-md bg-accent/20 border border-accent/40 flex items-center justify-center">
-            <span className="text-accent text-xs font-semibold">N</span>
-          </div>
+          <img src="/favicon.png" alt="North OS" className="w-6 h-6 shrink-0 rounded-md" />
           {!collapsed && (
             <span className="text-sm font-semibold tracking-tight truncate">North OS</span>
           )}

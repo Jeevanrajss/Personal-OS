@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Personal OS',
-        short_name: 'PersonalOS',
+        name: 'North OS',
+        short_name: 'NorthOS',
         description: 'Local-first AI personal productivity app',
         theme_color: '#0f0f10',
         background_color: '#0f0f10',

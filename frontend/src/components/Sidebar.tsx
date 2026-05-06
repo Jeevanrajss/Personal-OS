@@ -6,11 +6,11 @@ import {
 import { cn } from '@/lib/cn';
 
 const nav = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/journal', label: 'Journal', icon: BookText },
-  { to: '/finance', label: 'Finance', icon: Wallet },
-  { to: '/subscriptions', label: 'Subscriptions', icon: Repeat },
-  { to: '/habits', label: 'Habits', icon: CheckSquare },
+  { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/app/journal', label: 'Journal', icon: BookText },
+  { to: '/app/finance', label: 'Finance', icon: Wallet },
+  { to: '/app/subscriptions', label: 'Subscriptions', icon: Repeat },
+  { to: '/app/habits', label: 'Habits', icon: CheckSquare },
 ];
 
 type Props = { collapsed: boolean; onToggle: () => void };
@@ -29,10 +29,10 @@ export function Sidebar({ collapsed, onToggle }: Props) {
         {/* Logo mark */}
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-6 h-6 shrink-0 rounded-md bg-accent/20 border border-accent/40 flex items-center justify-center">
-            <span className="text-accent text-xs font-semibold">P</span>
+            <span className="text-accent text-xs font-semibold">N</span>
           </div>
           {!collapsed && (
-            <span className="text-sm font-semibold tracking-tight truncate">Personal OS</span>
+            <span className="text-sm font-semibold tracking-tight truncate">North OS</span>
           )}
         </div>
 

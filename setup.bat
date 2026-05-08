@@ -1,6 +1,6 @@
 @echo off
 REM =============================================================================
-REM Personal OS — one-command setup + launch (Windows)
+REM North OS -- one-command setup + launch (Windows)
 REM =============================================================================
 REM Usage (after cloning):
 REM   setup.bat          -> install deps + start the app
@@ -29,7 +29,7 @@ echo.
 echo === Checking prerequisites ===
 echo.
 
-REM ── Python 3.11+ ──
+REM -- Python 3.11+ --
 set PYBIN=
 for %%P in (python3.13 python3.12 python3.11 python3 python) do (
     if "!PYBIN!"=="" (
@@ -50,20 +50,20 @@ if "!PYBIN!"=="" (
     pause
     exit /b 1
 )
-echo [OK] Python  ^> !PYBIN! !PYVER!
+echo [OK] Python  -- !PYBIN! !PYVER!
 
-REM ── Node.js 18+ ──
+REM -- Node.js 18+ --
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found.
-    echo         Download from https://nodejs.org ^(LTS version^)
+    echo         Download from https://nodejs.org (LTS version)
     pause
     exit /b 1
 )
 for /f "tokens=*" %%V in ('node --version') do set NODE_VER=%%V
-echo [OK] Node.js ^> %NODE_VER%
+echo [OK] Node.js -- %NODE_VER%
 
-REM ── npm ──
+REM -- npm --
 where npm >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] npm not found. It should ship with Node.js.
@@ -71,7 +71,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 for /f "tokens=*" %%V in ('npm --version') do set NPM_VER=%%V
-echo [OK] npm     ^> %NPM_VER%
+echo [OK] npm     -- %NPM_VER%
 
 REM =============================================================================
 REM 2. ENVIRONMENT FILE
@@ -92,7 +92,7 @@ REM ============================================================================
 REM 3. PYTHON BACKEND
 REM =============================================================================
 echo.
-echo === Backend — Python virtual environment ===
+echo === Backend -- Python virtual environment ===
 echo.
 
 if not exist "backend\.venv" (
@@ -110,7 +110,7 @@ REM ============================================================================
 REM 4. FRONTEND
 REM =============================================================================
 echo.
-echo === Frontend — Node packages ===
+echo === Frontend -- Node packages ===
 echo.
 
 echo Running npm install...
@@ -125,7 +125,7 @@ echo [OK] Data directory ready
 
 echo.
 echo =====================================================
-echo   Personal OS setup complete!
+echo   North OS setup complete!
 echo =====================================================
 echo.
 
@@ -142,7 +142,7 @@ REM 6. START SERVERS
 REM =============================================================================
 :start_servers
 echo.
-echo === Launching Personal OS ===
+echo === Launching North OS ===
 echo.
 
 if not exist "backend\.venv" (
@@ -158,7 +158,7 @@ if not exist "frontend\node_modules" (
 )
 
 echo Starting backend on :8000 ...
-start "Personal OS — Backend" /min cmd /c "cd backend && .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+start "North OS - Backend" /min cmd /c "cd /d "%ROOT_DIR%backend" && .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload 2>&1"
 
 echo Waiting for backend to be ready...
 :wait_loop
@@ -168,16 +168,16 @@ if %errorlevel% neq 0 goto wait_loop
 echo [OK] Backend ready
 
 echo Starting frontend on :5173 ...
-start "Personal OS — Frontend" /min cmd /c "cd frontend && npm run dev"
+start "North OS - Frontend" /min cmd /c "cd /d "%ROOT_DIR%frontend" && npm run dev 2>&1"
 
 timeout /t 3 /nobreak >nul
 
 echo.
 echo =====================================================
-echo   Personal OS is running!
+echo   North OS is running!
 echo.
-echo   App  ->  http://127.0.0.1:5173
-echo   API  ->  http://127.0.0.1:8000/docs
+echo   App  -^>  http://127.0.0.1:5173
+echo   API  -^>  http://127.0.0.1:8000/docs
 echo.
 echo   Close the two terminal windows to stop.
 echo =====================================================

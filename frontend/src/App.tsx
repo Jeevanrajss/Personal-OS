@@ -42,16 +42,19 @@ function AppShell() {
   );
 }
 
+// Show the marketing landing page only when deployed to Netlify.
+// When running locally (setup.sh / setup.bat), go straight to the app.
+const SHOW_LANDING = import.meta.env.VITE_LANDING_PAGE === 'true';
+
 export default function App() {
   const location = useLocation();
 
-  // Landing page at root
+  // Root "/" — landing on Netlify, straight to app locally
   if (location.pathname === '/') {
-    return (
-      <Routes>
-        <Route path="/" element={<Landing />} />
-      </Routes>
-    );
+    if (SHOW_LANDING) {
+      return <Routes><Route path="/" element={<Landing />} /></Routes>;
+    }
+    return <Navigate to="/app" replace />;
   }
 
   // App shell wraps /app/* routes
@@ -63,7 +66,7 @@ export default function App() {
     );
   }
 
-  // Legacy direct routes (e.g. /journal, /habits) — redirect into /app/*
+  // Legacy direct routes — redirect into /app/*
   return (
     <Routes>
       <Route path="/journal" element={<Navigate to="/app/journal" replace />} />
@@ -72,7 +75,7 @@ export default function App() {
       <Route path="/habits" element={<Navigate to="/app/habits" replace />} />
       <Route path="/habits/:id" element={<Navigate to={`/app${location.pathname}`} replace />} />
       <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );
 }

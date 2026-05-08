@@ -40,3 +40,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Dev-only — not needed by end users
+SESSION_LOG.md
+HANDOFF.md
+.claude/
+assets/

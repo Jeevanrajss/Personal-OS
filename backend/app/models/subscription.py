@@ -45,6 +45,9 @@ class Subscription(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Optional free-trial end date. When set, the sub appears in the trial tracker.
+    trial_end_date: Mapped[date_cls | None] = mapped_column(Date, nullable=True)
+
     # Soft-pause — subscription is still active but billing is on hold.
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -458,6 +458,7 @@ export type Subscription = {
   currency: string;
   billing_cycle: BillingCycle;
   next_billing_date: string; // YYYY-MM-DD
+  trial_end_date: string | null; // YYYY-MM-DD
   monthly_equivalent: number;
   payment_type: PaymentType | null;
   account_name: string | null;
@@ -477,6 +478,7 @@ export type SubscriptionIn = {
   currency?: string;
   billing_cycle?: BillingCycle;
   next_billing_date: string;
+  trial_end_date?: string | null;
   payment_type?: PaymentType | null;
   account_name?: string | null;
   category?: string | null;
@@ -485,6 +487,20 @@ export type SubscriptionIn = {
 };
 
 export type SubscriptionPatch = Partial<SubscriptionIn>;
+
+// ---------------------------------------------------------------------------
+// Subscription billing forecast
+// ---------------------------------------------------------------------------
+export type ForecastMonth = {
+  year_month: string;  // "YYYY-MM"
+  total: number;
+  currency: string;
+  bill_count: number;
+};
+
+export type ForecastResponse = {
+  months: ForecastMonth[];
+};
 
 export type UpcomingRenewal = {
   subscription: Subscription;
@@ -844,5 +860,6 @@ export const api = {
     unpause: (id: string) =>
       request<Subscription>(`/subscriptions/${id}/unpause`, { method: 'POST' }),
     stats: () => request<SubscriptionStatsResponse>('/subscriptions/stats'),
+    forecast: () => request<ForecastResponse>('/subscriptions/forecast'),
   },
 };

@@ -11,6 +11,8 @@ from app.db import get_db
 from app.models.subscription import Subscription
 from app.schemas.subscription import (
     MONTHLY_MULT,
+    ForecastMonth,
+    ForecastResponse,
     SubscriptionIn,
     SubscriptionOut,
     SubscriptionPatch,
@@ -44,6 +46,83 @@ def get_stats(db: Session = Depends(get_db)):
         yearly_total=round(monthly_total * 12, 2),
         upcoming_30d=upcoming,
     )
+
+
+@router.get("/forecast", response_model=ForecastResponse)
+def billing_forecast(db: Session = Depends(get_db)):
+    """Compute billing events for the next 12 months from active subscriptions.
+
+    For each subscription, advances the billing date by its cycle until we
+    exceed 12 months out. Buckets by year-month; uses the subscription's own
+    currency (no FX conversion — keeps it simple and exact).
+    """
+    from collections import defaultdict
+
+    today = date.today()
+    cutoff = date(today.year + 1, today.month, today.day)
+
+    subs = (
+        db.query(Subscription)
+        .filter(
+            Subscription.cancelled_at.is_(None),
+            Subscription.paused_at.is_(None),
+        )
+        .all()
+    )
+
+    # ym → list of (amount, currency)
+    buckets: dict[str, list[tuple[float, str]]] = defaultdict(list)
+
+    cycle_delta = {
+        "weekly": timedelta(weeks=1),
+        "monthly": None,   # handled specially (calendar months)
+        "quarterly": None, # 3 calendar months
+        "yearly": None,    # 12 calendar months
+    }
+
+    def add_months(d: date, n: int) -> date:
+        """Add n calendar months to d, clamping to last day of month."""
+        m = d.month - 1 + n
+        year = d.year + m // 12
+        month = m % 12 + 1
+        import calendar
+        last_day = calendar.monthrange(year, month)[1]
+        return d.replace(year=year, month=month, day=min(d.day, last_day))
+
+    for sub in subs:
+        cur = sub.next_billing_date
+        while cur <= cutoff:
+            ym = cur.strftime("%Y-%m")
+            buckets[ym].append((sub.amount, sub.currency))
+            # Advance by billing cycle
+            if sub.billing_cycle == "weekly":
+                cur = cur + timedelta(weeks=1)
+            elif sub.billing_cycle == "monthly":
+                cur = add_months(cur, 1)
+            elif sub.billing_cycle == "quarterly":
+                cur = add_months(cur, 3)
+            elif sub.billing_cycle == "yearly":
+                cur = add_months(cur, 12)
+            else:
+                break  # unknown cycle — only include once
+
+    # Build 12 months starting from current month
+    months: list[ForecastMonth] = []
+    for i in range(12):
+        ym_date = add_months(today.replace(day=1), i)
+        ym = ym_date.strftime("%Y-%m")
+        bills = buckets.get(ym, [])
+        total = sum(a for a, _ in bills)
+        currencies = [c for _, c in bills]
+        primary_currency = max(set(currencies), key=currencies.count) if currencies else "—"
+        months.append(ForecastMonth(
+            year_month=ym,
+            total=round(total, 2),
+            currency=primary_currency,
+            bill_count=len(bills),
+        ))
+
+    return ForecastResponse(months=months)
 
 
 @router.get("", response_model=list[SubscriptionOut])

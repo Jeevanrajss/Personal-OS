@@ -194,6 +194,7 @@ def _dev_migrate_subscriptions(conn) -> None:
         ("payment_type", "VARCHAR(20)"),
         ("account_name", "VARCHAR(60)"),
         ("paused_at", "DATETIME"),
+        ("trial_end_date", "DATE"),
     ]
     for col, col_type in new_cols:
         if col not in existing_cols:

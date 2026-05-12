@@ -4,6 +4,8 @@ import { SubscriptionList } from '@/components/subscriptions/SubscriptionList';
 import { SubscriptionStatsCard } from '@/components/subscriptions/SubscriptionStatsCard';
 import { SpendingByCategoryCard } from '@/components/subscriptions/SpendingByCategoryCard';
 import { UpcomingRenewals } from '@/components/subscriptions/UpcomingRenewals';
+import { TrialTrackerCard } from '@/components/subscriptions/TrialTrackerCard';
+import { SubForecastCard } from '@/components/subscriptions/SubForecastCard';
 
 export function Subscriptions() {
   const [displayCurrency, setDisplayCurrency] = useState(
@@ -31,8 +33,10 @@ export function Subscriptions() {
             displayCurrency={displayCurrency}
             onCurrencyChange={handleCurrencyChange}
           />
+          <TrialTrackerCard />
           <SpendingByCategoryCard displayCurrency={displayCurrency} />
           <UpcomingRenewals />
+          <SubForecastCard />
         </aside>
       </div>
     </>

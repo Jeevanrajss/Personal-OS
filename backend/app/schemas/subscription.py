@@ -27,6 +27,7 @@ class SubscriptionIn(BaseModel):
     currency: str = Field(default="USD", max_length=8)
     billing_cycle: BillingCycle = "monthly"
     next_billing_date: date_cls
+    trial_end_date: date_cls | None = None
     payment_type: PaymentType | None = None
     account_name: str | None = Field(default=None, max_length=60)
     category: str | None = Field(default=None, max_length=40)
@@ -51,6 +52,7 @@ class SubscriptionPatch(BaseModel):
     currency: str | None = Field(default=None, max_length=8)
     billing_cycle: BillingCycle | None = None
     next_billing_date: date_cls | None = None
+    trial_end_date: date_cls | None = None
     payment_type: PaymentType | None = None
     account_name: str | None = Field(default=None, max_length=60)
     category: str | None = None
@@ -73,6 +75,7 @@ class SubscriptionOut(BaseModel):
     currency: str
     billing_cycle: str
     next_billing_date: date_cls
+    trial_end_date: date_cls | None
     payment_type: str | None
     account_name: str | None
     category: str | None
@@ -99,3 +102,15 @@ class SubscriptionStatsResponse(BaseModel):
     monthly_total: float
     yearly_total: float
     upcoming_30d: list[UpcomingRenewal]
+
+
+# Monthly billing forecast — one bucket per month for the next 12 months.
+class ForecastMonth(BaseModel):
+    year_month: str      # "YYYY-MM"
+    total: float         # sum of all bills due in this month (original currencies, no conversion)
+    currency: str        # primary currency (most common among bills that month)
+    bill_count: int      # number of billing events
+
+
+class ForecastResponse(BaseModel):
+    months: list[ForecastMonth]

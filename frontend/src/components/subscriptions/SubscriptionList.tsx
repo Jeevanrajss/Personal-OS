@@ -183,6 +183,7 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
   const [currency, setCurrency] = useState(sub.currency);
   const [cycle, setCycle] = useState<BillingCycle>(sub.billing_cycle);
   const [nextDate, setNextDate] = useState(sub.next_billing_date);
+  const [trialEndDate, setTrialEndDate] = useState(sub.trial_end_date ?? '');
   const [paymentType, setPaymentType] = useState<PaymentType | ''>(sub.payment_type ?? '');
   const [accountName, setAccountName] = useState(sub.account_name ?? '');
   const [category, setCategory] = useState(sub.category ?? '');
@@ -196,6 +197,7 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
   function beginEdit() {
     setEmoji(sub.emoji); setName(sub.name); setAmount(String(sub.amount));
     setCurrency(sub.currency); setCycle(sub.billing_cycle); setNextDate(sub.next_billing_date);
+    setTrialEndDate(sub.trial_end_date ?? '');
     setPaymentType(sub.payment_type ?? ''); setAccountName(sub.account_name ?? '');
     setCategory(sub.category ?? ''); setError(null); setEditing(true);
   }
@@ -213,6 +215,8 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
     if (currency !== sub.currency) patch.currency = currency;
     if (cycle !== sub.billing_cycle) patch.billing_cycle = cycle;
     if (nextDate !== sub.next_billing_date) patch.next_billing_date = nextDate;
+    const ted = trialEndDate || null;
+    if (ted !== sub.trial_end_date) patch.trial_end_date = ted;
     const pt = paymentType || null;
     if (pt !== sub.payment_type) patch.payment_type = pt;
     const an = accountName.trim() || null;
@@ -276,13 +280,18 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
         </div>
         <div className="flex items-center gap-2">
           <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)}
-            className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 text-ink-200" />
+            className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]" />
           <input list="sub-categories-edit" value={category} onChange={(e) => setCategory(e.target.value)}
             placeholder="Category" maxLength={40}
             className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600" />
           <datalist id="sub-categories-edit">
             {CATEGORIES.map((c) => <option key={c} value={c} />)}
           </datalist>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] text-ink-600 shrink-0">Trial end:</label>
+          <input type="date" value={trialEndDate} onChange={(e) => setTrialEndDate(e.target.value)}
+            className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]" />
         </div>
         {error && <div className="text-[11px] text-red-400 pl-1">{error}</div>}
       </li>

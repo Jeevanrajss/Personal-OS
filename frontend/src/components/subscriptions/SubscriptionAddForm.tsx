@@ -25,6 +25,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
   const [currency, setCurrency] = useState('INR');
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [nextDate, setNextDate] = useState(today);
+  const [trialEndDate, setTrialEndDate] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType | ''>('');
   const [accountName, setAccountName] = useState('');
   const [category, setCategory] = useState('');
@@ -35,9 +36,9 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
 
   function reset() {
     setEmoji('💳'); setName(''); setAmount(''); setCurrency('INR');
-    setCycle('monthly'); setNextDate(today); setPaymentType('');
-    setAccountName(''); setCategory(''); setNotes(''); setUrl('');
-    setError(null);
+    setCycle('monthly'); setNextDate(today); setTrialEndDate('');
+    setPaymentType(''); setAccountName(''); setCategory('');
+    setNotes(''); setUrl(''); setError(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -57,6 +58,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
         currency,
         billing_cycle: cycle,
         next_billing_date: nextDate,
+        trial_end_date: trialEndDate || null,
         payment_type: paymentType || null,
         account_name: accountName.trim() || null,
         category: category.trim() || null,
@@ -153,7 +155,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
             type="date"
             value={nextDate}
             onChange={(e) => setNextDate(e.target.value)}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
+            className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]"
           />
         </div>
         <div className="flex-1">
@@ -170,6 +172,19 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
             {CATEGORIES.map((c) => <option key={c} value={c} />)}
           </datalist>
         </div>
+      </div>
+
+      {/* Trial end date (optional) */}
+      <div>
+        <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">
+          Free trial end date <span className="normal-case text-ink-700">(optional)</span>
+        </label>
+        <input
+          type="date"
+          value={trialEndDate}
+          onChange={(e) => setTrialEndDate(e.target.value)}
+          className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]"
+        />
       </div>
 
       {/* URL + notes */}

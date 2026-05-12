@@ -10,6 +10,8 @@ import {
   PAYMENT_TYPE_OPTS,
 } from './subUtils';
 
+type Mode = 'subscription' | 'trial';
+
 type Props = {
   onCreate: (payload: SubscriptionIn) => Promise<void>;
   onCancel?: () => void;
@@ -19,59 +21,91 @@ type Props = {
 const today = new Date().toISOString().slice(0, 10);
 
 export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
+  const [mode, setMode] = useState<Mode>('subscription');
+
+  // Shared fields
   const [emoji, setEmoji] = useState('💳');
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('INR');
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
-  const [nextDate, setNextDate] = useState(today);
-  const [trialEndDate, setTrialEndDate] = useState('');
-  const [postTrialAmount, setPostTrialAmount] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType | ''>('');
   const [accountName, setAccountName] = useState('');
   const [category, setCategory] = useState('');
   const [notes, setNotes] = useState('');
   const [url, setUrl] = useState('');
+
+  // Subscription-mode fields
+  const [amount, setAmount] = useState('');
+  const [nextDate, setNextDate] = useState(today);
+
+  // Trial-mode fields  (trial_end_date === next_billing_date)
+  const [billingStartDate, setBillingStartDate] = useState('');
+  const [postTrialAmount, setPostTrialAmount] = useState('');
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
-    setEmoji('💳'); setName(''); setAmount(''); setCurrency('INR');
-    setCycle('monthly'); setNextDate(today); setTrialEndDate('');
-    setPostTrialAmount('');
+    setEmoji('💳'); setName(''); setCurrency('INR'); setCycle('monthly');
     setPaymentType(''); setAccountName(''); setCategory('');
-    setNotes(''); setUrl(''); setError(null);
+    setNotes(''); setUrl('');
+    setAmount(''); setNextDate(today);
+    setBillingStartDate(''); setPostTrialAmount('');
+    setError(null);
+  }
+
+  function switchMode(m: Mode) {
+    setMode(m);
+    setError(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmedName = name.trim();
-    const parsedAmount = parseFloat(amount);
-    const parsedPostTrialAmount = postTrialAmount ? parseFloat(postTrialAmount) : null;
     if (!trimmedName) { setError('Name is required.'); return; }
-    if (isNaN(parsedAmount) || parsedAmount < 0) { setError('Enter a valid amount (0 for free).'); return; }
-    if (parsedPostTrialAmount !== null && (isNaN(parsedPostTrialAmount) || parsedPostTrialAmount < 0)) {
-      setError('Enter a valid post-trial price.'); return;
-    }
-    if (!nextDate) { setError('Next billing date is required.'); return; }
 
     setSaving(true);
     setError(null);
     try {
-      await onCreate({
-        name: trimmedName, emoji,
-        amount: parsedAmount,
-        currency,
-        billing_cycle: cycle,
-        next_billing_date: nextDate,
-        trial_end_date: trialEndDate || null,
-        post_trial_amount: parsedPostTrialAmount,
-        payment_type: paymentType || null,
-        account_name: accountName.trim() || null,
-        category: category.trim() || null,
-        notes: notes.trim() || null,
-        url: url.trim() || null,
-      });
+      if (mode === 'trial') {
+        if (!billingStartDate) { setError('Billing start date is required.'); setSaving(false); return; }
+        const pta = postTrialAmount ? parseFloat(postTrialAmount) : null;
+        if (pta !== null && (isNaN(pta) || pta < 0)) {
+          setError('Enter a valid post-trial price.'); setSaving(false); return;
+        }
+        await onCreate({
+          name: trimmedName, emoji,
+          amount: 0,
+          currency,
+          billing_cycle: cycle,
+          next_billing_date: billingStartDate,  // same date
+          trial_end_date: billingStartDate,      // same date
+          post_trial_amount: pta,
+          payment_type: paymentType || null,
+          account_name: accountName.trim() || null,
+          category: category.trim() || null,
+          notes: notes.trim() || null,
+          url: url.trim() || null,
+        });
+      } else {
+        const parsedAmount = parseFloat(amount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) { setError('Enter a valid amount.'); setSaving(false); return; }
+        if (!nextDate) { setError('Next billing date is required.'); setSaving(false); return; }
+        await onCreate({
+          name: trimmedName, emoji,
+          amount: parsedAmount,
+          currency,
+          billing_cycle: cycle,
+          next_billing_date: nextDate,
+          trial_end_date: null,
+          post_trial_amount: null,
+          payment_type: paymentType || null,
+          account_name: accountName.trim() || null,
+          category: category.trim() || null,
+          notes: notes.trim() || null,
+          url: url.trim() || null,
+        });
+      }
       reset();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save.');
@@ -80,8 +114,41 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
     }
   }
 
+  const canSubmit = !saving && !disabled && !!name.trim() && (
+    mode === 'trial' ? !!billingStartDate : (amount !== '' && parseFloat(amount) > 0)
+  );
+
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+
+      {/* Mode toggle */}
+      <div className="flex rounded-md border border-ink-800 overflow-hidden w-fit text-xs">
+        <button
+          type="button"
+          onClick={() => switchMode('subscription')}
+          className={cn(
+            'px-3 py-1.5 transition-colors',
+            mode === 'subscription'
+              ? 'bg-accent/20 text-accent border-r border-ink-800'
+              : 'bg-ink-900 text-ink-500 hover:text-ink-300 border-r border-ink-800',
+          )}
+        >
+          Subscription
+        </button>
+        <button
+          type="button"
+          onClick={() => switchMode('trial')}
+          className={cn(
+            'px-3 py-1.5 transition-colors',
+            mode === 'trial'
+              ? 'bg-emerald-500/15 text-emerald-400'
+              : 'bg-ink-900 text-ink-500 hover:text-ink-300',
+          )}
+        >
+          Free / Trial
+        </button>
+      </div>
+
       {/* Emoji + name */}
       <div className="flex items-center gap-2">
         <EmojiPickerPopover value={emoji} onChange={setEmoji} size="sm" />
@@ -96,38 +163,145 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
         />
       </div>
 
-      {/* Amount + currency + cycle */}
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="0.00"
-          min="0"
-          step="0.01"
-          className="w-24 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
-        />
-        <select
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value)}
-          className="w-20 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
-        >
-          {CURRENCY_OPTS.map((o) => (
-            <option key={o.value} value={o.value}>{o.value}</option>
-          ))}
-        </select>
-        <select
-          value={cycle}
-          onChange={(e) => setCycle(e.target.value as BillingCycle)}
-          className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
-        >
-          {CYCLE_OPTS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
+      {/* ── SUBSCRIPTION MODE ── */}
+      {mode === 'subscription' && (
+        <>
+          {/* Amount + currency + cycle */}
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              min="0.01"
+              step="0.01"
+              className="w-24 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+            />
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="w-20 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
+            >
+              {CURRENCY_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>{o.value}</option>
+              ))}
+            </select>
+            <select
+              value={cycle}
+              onChange={(e) => setCycle(e.target.value as BillingCycle)}
+              className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
+            >
+              {CYCLE_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
 
-      {/* Payment type + account name */}
+          {/* Next billing date + category */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">Next billing</label>
+              <input
+                type="date"
+                value={nextDate}
+                onChange={(e) => setNextDate(e.target.value)}
+                className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">Category</label>
+              <input
+                list="sub-categories-add"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g. Streaming"
+                maxLength={40}
+                className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+              />
+              <datalist id="sub-categories-add">
+                {CATEGORIES.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── FREE TRIAL MODE ── */}
+      {mode === 'trial' && (
+        <>
+          {/* Billing starts on date (= trial_end_date = next_billing_date) + post-trial price */}
+          <div className="rounded-md bg-emerald-500/5 border border-emerald-500/20 px-3 py-2.5 space-y-2.5">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] text-emerald-500/80 uppercase tracking-wide mb-0.5 block">
+                  Billing starts on
+                </label>
+                <input
+                  type="date"
+                  value={billingStartDate}
+                  onChange={(e) => setBillingStartDate(e.target.value)}
+                  className="w-full bg-ink-900 border border-emerald-500/30 rounded-md px-2 py-1.5 text-sm outline-none focus:border-emerald-500/60 text-ink-200 [color-scheme:dark]"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] text-emerald-500/80 uppercase tracking-wide mb-0.5 block">
+                  Price after trial
+                </label>
+                <input
+                  type="number"
+                  value={postTrialAmount}
+                  onChange={(e) => setPostTrialAmount(e.target.value)}
+                  placeholder="e.g. 399"
+                  min="0"
+                  step="0.01"
+                  className="w-full bg-ink-900 border border-emerald-500/30 rounded-md px-2 py-1.5 text-sm outline-none focus:border-emerald-500/60 placeholder:text-ink-700"
+                />
+              </div>
+            </div>
+
+            {/* Currency + cycle row */}
+            <div className="flex items-center gap-2">
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-20 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
+              >
+                {CURRENCY_OPTS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.value}</option>
+                ))}
+              </select>
+              <select
+                value={cycle}
+                onChange={(e) => setCycle(e.target.value as BillingCycle)}
+                className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200"
+              >
+                {CYCLE_OPTS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <div className="flex-1">
+                <input
+                  list="sub-categories-trial"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="Category (optional)"
+                  maxLength={40}
+                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+                />
+                <datalist id="sub-categories-trial">
+                  {CATEGORIES.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-emerald-600">
+              Currently free — tracked in Trial Tracker. Countdown to first charge.
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Payment type + account (shared) */}
       <div className="flex items-center gap-2">
         <select
           value={paymentType}
@@ -154,65 +328,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
         </div>
       </div>
 
-      {/* Next billing date + category */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">Next billing</label>
-          <input
-            type="date"
-            value={nextDate}
-            onChange={(e) => setNextDate(e.target.value)}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">Category</label>
-          <input
-            list="sub-categories-add"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="e.g. Streaming"
-            maxLength={40}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
-          />
-          <datalist id="sub-categories-add">
-            {CATEGORIES.map((c) => <option key={c} value={c} />)}
-          </datalist>
-        </div>
-      </div>
-
-      {/* Trial end date + post-trial price */}
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">
-            Trial / free period ends <span className="normal-case text-ink-700">(optional)</span>
-          </label>
-          <input
-            type="date"
-            value={trialEndDate}
-            onChange={(e) => setTrialEndDate(e.target.value)}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200 [color-scheme:dark]"
-          />
-        </div>
-        {trialEndDate && (
-          <div className="flex-1">
-            <label className="text-[10px] text-ink-500 uppercase tracking-wide mb-0.5 block">
-              Price after trial
-            </label>
-            <input
-              type="number"
-              value={postTrialAmount}
-              onChange={(e) => setPostTrialAmount(e.target.value)}
-              placeholder="e.g. 399"
-              min="0"
-              step="0.01"
-              className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* URL + notes */}
+      {/* URL + notes (shared) */}
       <div className="space-y-2">
         <input
           value={url}
@@ -236,7 +352,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
       <div className="flex items-center gap-2">
         <button
           type="submit"
-          disabled={saving || disabled || !name.trim() || amount === ''}
+          disabled={!canSubmit}
           className="px-3 py-1.5 rounded-md bg-accent/20 border border-accent/40 text-xs text-accent hover:bg-accent/30 disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Add'}

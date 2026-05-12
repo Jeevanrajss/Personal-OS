@@ -7,6 +7,9 @@ import { MoodSparkline } from '@/components/journal/MoodSparkline';
 import { TagCloud } from '@/components/journal/TagCloud';
 import { ReflectToday } from '@/components/journal/ReflectToday';
 import { JournalSearch } from '@/components/journal/JournalSearch';
+import { JournalAnnualCard } from '@/components/journal/JournalAnnualCard';
+import { MoodHabitCard } from '@/components/journal/MoodHabitCard';
+import { JournalExportButton } from '@/components/journal/JournalExportButton';
 import { startOfMonth } from '@/lib/date';
 
 export function Journal() {
@@ -26,6 +29,7 @@ export function Journal() {
       <PageHeader
         title="Journal"
         subtitle="One page per day. Mood, tags, summary, and as many entries as you want."
+        action={<JournalExportButton />}
       />
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5">
         <div className="lg:sticky lg:top-8 self-start space-y-5">
@@ -38,6 +42,8 @@ export function Journal() {
           <StreakCard />
           <MoodSparkline />
           <TagCloud />
+          <JournalAnnualCard />
+          <MoodHabitCard />
           <JournalSearch />
         </div>
         <div className="space-y-5">

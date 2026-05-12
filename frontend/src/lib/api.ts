@@ -288,6 +288,39 @@ export type StatsResponse = {
 export const MAX_MOODS_PER_DAY = 3;
 
 // ---------------------------------------------------------------------------
+// Annual review
+// ---------------------------------------------------------------------------
+export type MonthlyAnnualPoint = {
+  year_month: string;        // "YYYY-MM"
+  active_days: number;
+  total_entries: number;
+  valence_avg: number | null;
+  top_tags: string[];
+};
+
+export type AnnualResponse = {
+  months: MonthlyAnnualPoint[];
+};
+
+// ---------------------------------------------------------------------------
+// Mood-habit correlation
+// ---------------------------------------------------------------------------
+export type HabitMoodCorrelation = {
+  habit_id: string;
+  habit_name: string;
+  habit_emoji: string;
+  days_done: number;
+  avg_mood_with: number | null;
+  avg_mood_without: number | null;
+  mood_lift: number | null;
+};
+
+export type MoodHabitResponse = {
+  window_days: number;
+  correlations: HabitMoodCorrelation[];
+};
+
+// ---------------------------------------------------------------------------
 // Habit types — mirror of app/schemas/habit.py
 // ---------------------------------------------------------------------------
 export type FrequencyKind = 'daily' | 'weekly';
@@ -651,6 +684,17 @@ export const api = {
       }),
     stats: (windowDays = 30) =>
       request<StatsResponse>(`/journal/stats?days=${windowDays}`),
+    annual: () =>
+      request<AnnualResponse>('/journal/annual'),
+    moodHabits: (days = 90) =>
+      request<MoodHabitResponse>(`/journal/mood-habits?days=${days}`),
+    export: (start: string, end: string) => {
+      const url = `/api/v1/journal/export?start=${start}&end=${end}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `journal_${start}_${end}.md`;
+      a.click();
+    },
   },
 
   habits: {

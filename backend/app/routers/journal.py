@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.journal import JournalDay, JournalEntry, MoodCode, Tag
 from app.schemas.journal import (
+    AnnualOut,
     CalendarCell,
     CalendarOut,
     DailyValencePoint,
@@ -32,9 +33,12 @@ from app.schemas.journal import (
     DayPatch,
     EntryIn,
     EntryOut,
+    HabitMoodCorrelation,
     JournalSearchRequest,
     JournalSearchResult,
+    MonthlyAnnualPoint,
     MoodCodeOut,
+    MoodHabitOut,
     StatsOut,
     TagCount,
     TagOut,
@@ -461,6 +465,235 @@ async def search_journal(body: JournalSearchRequest, db: Session = Depends(get_d
             break
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Annual review — 12 monthly buckets
+# ---------------------------------------------------------------------------
+@router.get("/annual", response_model=AnnualOut)
+def annual_review(db: Session = Depends(get_db)):
+    """Return the last 12 complete months of journal activity.
+
+    Each bucket has: active_days, total_entries, avg valence, top 3 tags.
+    """
+    from collections import defaultdict
+
+    today = date_cls.today()
+    # Start from 12 months ago (first day of that month)
+    if today.month == 12:
+        start_year, start_month = today.year - 1, 1
+    else:
+        start_year = today.year - 1
+        start_month = today.month + 1
+    start = date_cls(start_year, start_month, 1)
+
+    day_rows = (
+        db.query(JournalDay)
+        .filter(JournalDay.date >= start, JournalDay.date <= today)
+        .all()
+    )
+    valence_map = mood_valence_map(db)
+
+    # Group by year-month
+    by_month: dict[str, list[JournalDay]] = defaultdict(list)
+    for d in day_rows:
+        by_month[d.date.strftime("%Y-%m")].append(d)
+
+    months: list[MonthlyAnnualPoint] = []
+    cur_year, cur_month = start_year, start_month
+    for _ in range(12):
+        ym = f"{cur_year:04d}-{cur_month:02d}"
+        days_in_month = by_month.get(ym, [])
+
+        active_days = sum(1 for d in days_in_month if d.entries)
+        total_entries = sum(len(d.entries) for d in days_in_month)
+
+        # Valence avg across all days that have moods
+        valences = [
+            _avg_valence(d.mood_codes, valence_map)
+            for d in days_in_month
+            if d.mood_codes
+        ]
+        valences = [v for v in valences if v is not None]
+        valence_avg = (sum(valences) / len(valences)) if valences else None
+
+        # Top 3 tags by frequency
+        tag_counts: dict[str, int] = {}
+        for d in days_in_month:
+            for t in d.tags or []:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        top_tags = [k for k, _ in sorted(tag_counts.items(), key=lambda x: -x[1])[:3]]
+
+        months.append(MonthlyAnnualPoint(
+            year_month=ym,
+            active_days=active_days,
+            total_entries=total_entries,
+            valence_avg=round(valence_avg, 2) if valence_avg is not None else None,
+            top_tags=top_tags,
+        ))
+
+        # Advance month
+        if cur_month == 12:
+            cur_year += 1
+            cur_month = 1
+        else:
+            cur_month += 1
+
+    return AnnualOut(months=months)
+
+
+# ---------------------------------------------------------------------------
+# Mood-habit correlation
+# ---------------------------------------------------------------------------
+@router.get("/mood-habits", response_model=MoodHabitOut)
+def mood_habit_correlation(
+    days: int = Query(90, ge=14, le=365),
+    db: Session = Depends(get_db),
+):
+    """Cross-reference habit check-ins with daily mood valence.
+
+    For each active habit: compare average mood on days done vs not done.
+    Only includes days where the user logged at least one mood.
+    """
+    from app.models.habit import Habit, HabitCheckin
+
+    today = date_cls.today()
+    start = today - timedelta(days=days - 1)
+    valence_map = mood_valence_map(db)
+
+    # All journal days in window that have moods
+    day_rows = (
+        db.query(JournalDay)
+        .filter(JournalDay.date >= start, JournalDay.date <= today)
+        .all()
+    )
+    # date → valence
+    day_valence: dict[date_cls, float] = {}
+    for d in day_rows:
+        v = _avg_valence(d.mood_codes, valence_map)
+        if v is not None:
+            day_valence[d.date] = v
+
+    if not day_valence:
+        return MoodHabitOut(window_days=days, correlations=[])
+
+    habits = (
+        db.query(Habit)
+        .filter(Habit.archived_at.is_(None))
+        .order_by(Habit.sort_order)
+        .all()
+    )
+
+    checkins = (
+        db.query(HabitCheckin)
+        .filter(
+            HabitCheckin.day_date >= start,
+            HabitCheckin.day_date <= today,
+        )
+        .all()
+    )
+    # habit_id → set of dates done
+    done_by_habit: dict[str, set[date_cls]] = {h.id: set() for h in habits}
+    for c in checkins:
+        if c.habit_id in done_by_habit:
+            done_by_habit[c.habit_id].add(c.day_date)
+
+    correlations: list[HabitMoodCorrelation] = []
+    for h in habits:
+        done_dates = done_by_habit[h.id]
+        days_done = len(done_dates)
+
+        with_vals = [day_valence[d] for d in done_dates if d in day_valence]
+        without_vals = [
+            v for d, v in day_valence.items() if d not in done_dates
+        ]
+
+        avg_with = (sum(with_vals) / len(with_vals)) if with_vals else None
+        avg_without = (sum(without_vals) / len(without_vals)) if without_vals else None
+
+        lift: float | None = None
+        if avg_with is not None and avg_without is not None:
+            lift = round(avg_with - avg_without, 2)
+
+        correlations.append(HabitMoodCorrelation(
+            habit_id=h.id,
+            habit_name=h.name,
+            habit_emoji=h.emoji,
+            days_done=days_done,
+            avg_mood_with=round(avg_with, 2) if avg_with is not None else None,
+            avg_mood_without=round(avg_without, 2) if avg_without is not None else None,
+            mood_lift=lift,
+        ))
+
+    # Sort by absolute mood lift descending (strongest correlation first)
+    correlations.sort(key=lambda c: abs(c.mood_lift or 0), reverse=True)
+    return MoodHabitOut(window_days=days, correlations=correlations)
+
+
+# ---------------------------------------------------------------------------
+# Journal export — returns Markdown text for a date range
+# ---------------------------------------------------------------------------
+@router.get("/export")
+def export_journal(
+    start: date_cls = Query(..., description="Start date YYYY-MM-DD"),
+    end: date_cls = Query(..., description="End date YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+):
+    """Export journal entries as a Markdown document.
+
+    Returns plain text with Content-Disposition so the browser saves it.
+    """
+    from fastapi.responses import PlainTextResponse
+
+    if (end - start).days > 366:
+        raise HTTPException(400, "Date range cannot exceed 366 days")
+
+    day_rows = (
+        db.query(JournalDay)
+        .filter(JournalDay.date >= start, JournalDay.date <= end)
+        .order_by(JournalDay.date)
+        .all()
+    )
+
+    lines: list[str] = [f"# Journal Export: {start} to {end}\n"]
+    for d in day_rows:
+        has_content = (
+            d.entries or d.mood_codes or d.tags or
+            d.summary_highlights or d.summary_wins or
+            d.summary_learnings or d.summary_gratitude
+        )
+        if not has_content:
+            continue
+
+        lines.append(f"\n---\n\n## {d.date.strftime('%A, %B %-d, %Y')}")
+        if d.mood_codes:
+            lines.append(f"**Mood:** {', '.join(d.mood_codes)}")
+        if d.tags:
+            lines.append(f"**Tags:** {', '.join(f'#{t}' for t in d.tags)}")
+
+        if d.summary_highlights or d.summary_wins or d.summary_learnings or d.summary_gratitude:
+            lines.append("\n### Daily Summary")
+        if d.summary_highlights:
+            lines.append(f"**Highlights:** {d.summary_highlights}")
+        if d.summary_wins:
+            lines.append(f"**Wins:** {d.summary_wins}")
+        if d.summary_learnings:
+            lines.append(f"**Learnings:** {d.summary_learnings}")
+        if d.summary_gratitude:
+            lines.append(f"**Gratitude:** {d.summary_gratitude}")
+
+        for i, entry in enumerate(d.entries, 1):
+            text = (entry.content_text or "").strip()
+            if text:
+                lines.append(f"\n### Entry {i}")
+                lines.append(text)
+
+    content = "\n".join(lines)
+    filename = f"journal_{start}_{end}.md"
+    return PlainTextResponse(
+        content,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -154,6 +154,39 @@ class JournalSearchResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Annual review — 12 monthly buckets
+# ---------------------------------------------------------------------------
+class MonthlyAnnualPoint(BaseModel):
+    year_month: str        # "YYYY-MM"
+    active_days: int       # days with >=1 entry
+    total_entries: int
+    valence_avg: float | None  # None if no moods logged that month
+    top_tags: list[str]    # up to 3 most common tag names
+
+
+class AnnualOut(BaseModel):
+    months: list[MonthlyAnnualPoint]
+
+
+# ---------------------------------------------------------------------------
+# Mood-habit correlation
+# ---------------------------------------------------------------------------
+class HabitMoodCorrelation(BaseModel):
+    habit_id: str
+    habit_name: str
+    habit_emoji: str
+    days_done: int                # how many days in window it was completed
+    avg_mood_with: float | None   # avg valence on days the habit was done
+    avg_mood_without: float | None  # avg valence on days it was NOT done
+    mood_lift: float | None       # avg_mood_with - avg_mood_without
+
+
+class MoodHabitOut(BaseModel):
+    window_days: int
+    correlations: list[HabitMoodCorrelation]
+
+
+# ---------------------------------------------------------------------------
 # AI tag suggestions — transient (not persisted)
 # ---------------------------------------------------------------------------
 class TagSuggestionOut(BaseModel):

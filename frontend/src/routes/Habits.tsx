@@ -7,6 +7,7 @@ import { HabitWeekTable } from '@/components/habits/HabitWeekTable';
 import { HabitStreakCard } from '@/components/habits/HabitStreakCard';
 import { HabitList } from '@/components/habits/HabitList';
 import { HabitInsightsCard } from '@/components/habits/HabitInsightsCard';
+import { HabitWeekChart } from '@/components/habits/HabitWeekChart';
 import { api, type HabitIn } from '@/lib/api';
 import {
   addDays,
@@ -215,9 +216,13 @@ export function Habits() {
                 <HabitWeekTable habits={habits} weekStart={weekStart} />
               )
             ) : (
-              <div className="py-10 text-center text-sm text-ink-500">
-                Weekly progress chart coming soon.
-              </div>
+              habitsQ.isLoading ? (
+                <div className="flex items-center justify-center py-10 text-ink-500">
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading habits…
+                </div>
+              ) : (
+                <HabitWeekChart habits={habits} weekStart={weekStart} />
+              )
             )}
           </div>
         </div>

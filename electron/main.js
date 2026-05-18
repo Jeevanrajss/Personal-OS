@@ -315,7 +315,7 @@ ipcMain.handle('activate', async (_event, key) => {
   }
 });
 
-// ── Auto-updater logging ──────────────────────────────────────────────────────
+// ── Updater logging ───────────────────────────────────────────────────────────
 
 let _logPath = null;
 function updaterLog(level, msg) {
@@ -323,7 +323,6 @@ function updaterLog(level, msg) {
   console.log('[updater]', msg);
   try {
     if (!_logPath) _logPath = path.join(app.getPath('userData'), 'updater.log');
-    // Keep log under 200 KB — truncate if larger
     try {
       const stat = fs.statSync(_logPath);
       if (stat.size > 200_000) fs.writeFileSync(_logPath, line, 'utf8');
@@ -334,18 +333,7 @@ function updaterLog(level, msg) {
   } catch { /* never crash because of logging */ }
 }
 
-// Unsigned build — skip both JS-level and Squirrel-level signature checks
-autoUpdater.verifyUpdateCodeSignature = () => Promise.resolve(null);
-
-// Wire electron-updater's internal logger to our file
-autoUpdater.logger = {
-  info:  (m) => updaterLog('info',  typeof m === 'object' ? JSON.stringify(m) : m),
-  warn:  (m) => updaterLog('warn',  typeof m === 'object' ? JSON.stringify(m) : m),
-  error: (m) => updaterLog('error', typeof m === 'object' ? JSON.stringify(m) : m),
-  debug: (m) => updaterLog('debug', typeof m === 'object' ? JSON.stringify(m) : m),
-};
-
-// ── Auto-updater ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getActiveWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
@@ -354,63 +342,123 @@ function getActiveWindow() {
     ?? null;
 }
 
-function checkForUpdates() {
-  if (IS_DEV) {
-    updaterLog('info', 'Dev mode — skipping update check');
-    return;
+/** Returns true if semver a > b  e.g. semverGt('1.0.10', '1.0.9') === true */
+function semverGt(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return true;
+    if ((pa[i] || 0) < (pb[i] || 0)) return false;
   }
-  updaterLog('info', `Checking for updates (current: ${app.getVersion()})`);
-  autoUpdater.checkForUpdates().catch((err) => {
-    updaterLog('error', `checkForUpdates() threw: ${err?.message ?? err}`);
-    // Show visible error so we know it failed
-    const win = getActiveWindow();
-    const msg = `Update check failed:\n${err?.message ?? err}\n\nCheck ${path.join(app.getPath('userData'), 'updater.log')} for details.`;
-    if (win) dialog.showMessageBox(win, { type: 'error', title: 'Update Check Failed', message: msg, buttons: ['OK'] }).catch(() => {});
-    else dialog.showMessageBox({ type: 'error', title: 'Update Check Failed', message: msg, buttons: ['OK'] }).catch(() => {});
-  });
+  return false;
 }
 
-autoUpdater.on('checking-for-update', () => {
-  updaterLog('info', 'Contacting GitHub releases…');
-});
+// ── macOS updater (GitHub API — bypasses Squirrel.Mac signature validation) ───
+//
+// Squirrel.Mac validates code signatures of downloaded updates. Unsigned builds
+// fail this check because Electron's own framework components are pre-signed
+// by GitHub, creating an inconsistency that Squirrel rejects.
+// Solution: skip Squirrel entirely on macOS. Check GitHub releases directly,
+// show a dialog, and open the DMG download link in the browser.
+
+async function checkForUpdatesMac() {
+  updaterLog('info', `[mac] Checking GitHub releases (current: ${app.getVersion()})`);
+  try {
+    const res = await fetch(
+      'https://api.github.com/repos/Jeevanrajss/North-OS/releases/latest',
+      { headers: { 'User-Agent': 'PersonalOS-Updater' }, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) {
+      updaterLog('error', `[mac] GitHub API returned ${res.status}`);
+      return;
+    }
+    const release = await res.json();
+    const latest  = (release.tag_name ?? '').replace(/^v/, '');
+    const current = app.getVersion();
+    updaterLog('info', `[mac] latest=${latest} current=${current}`);
+
+    if (!latest || !semverGt(latest, current)) {
+      updaterLog('info', '[mac] Already up to date');
+      return;
+    }
+
+    updaterLog('info', `[mac] Update available: ${latest}`);
+
+    // Find the right DMG asset for the running arch
+    const arch  = process.arch; // 'arm64' or 'x64'
+    const assets = release.assets ?? [];
+    const dmg    = assets.find((a) => a.name.endsWith('.dmg') && a.name.includes(arch))
+                ?? assets.find((a) => a.name.endsWith('.dmg')); // fallback
+
+    const rawNotes = typeof release.body === 'string'
+      ? release.body.replace(/<[^>]+>/g, '').trim().slice(0, 600)
+      : '';
+
+    const detail = [
+      `You have ${current}. Click Download to get ${latest}.`,
+      rawNotes ? `\nWhat's new:\n${rawNotes}` : '',
+      '\nThe app will open the download page — drag the new version to Applications to install.',
+    ].filter(Boolean).join('');
+
+    const win  = getActiveWindow();
+    const opts = {
+      type: 'info',
+      title: 'Update Available',
+      message: `Personal OS ${latest} is available`,
+      detail,
+      buttons: ['Download', 'Later'],
+      defaultId: 0,
+      cancelId:  1,
+    };
+
+    const choice = win
+      ? dialog.showMessageBoxSync(win, opts)
+      : dialog.showMessageBoxSync(opts);
+
+    updaterLog('info', `[mac] Dialog choice: ${choice === 0 ? 'Download' : 'Later'}`);
+
+    if (choice === 0) {
+      const url = dmg?.browser_download_url
+        ?? `https://github.com/Jeevanrajss/North-OS/releases/tag/v${latest}`;
+      updaterLog('info', `[mac] Opening: ${url}`);
+      shell.openExternal(url);
+    }
+  } catch (err) {
+    updaterLog('error', `[mac] checkForUpdatesMac error: ${err?.message ?? err}`);
+  }
+}
+
+// ── Windows updater (electron-updater / Squirrel.Windows) ────────────────────
+
+autoUpdater.logger = {
+  info:  (m) => updaterLog('info',  typeof m === 'object' ? JSON.stringify(m) : m),
+  warn:  (m) => updaterLog('warn',  typeof m === 'object' ? JSON.stringify(m) : m),
+  error: (m) => updaterLog('error', typeof m === 'object' ? JSON.stringify(m) : m),
+  debug: (m) => updaterLog('debug', typeof m === 'object' ? JSON.stringify(m) : m),
+};
 
 autoUpdater.on('update-available', (info) => {
-  updaterLog('info', `Update available: ${info.version}`);
-
-  const rawNotes = typeof info.releaseNotes === 'string'
-    ? info.releaseNotes
-    : Array.isArray(info.releaseNotes)
-      ? info.releaseNotes.map((r) => r.note || '').join('\n')
-      : '';
-  const notes = rawNotes.replace(/<[^>]+>/g, '').trim();
-
-  const detail = [
-    `Version ${info.version} is available (you have ${app.getVersion()}).`,
-    notes ? `\nWhat's new:\n${notes}` : '',
-    '\nDownloading in the background — you\'ll be notified when it\'s ready to install.',
-  ].filter(Boolean).join('');
-
+  updaterLog('info', `[win] Update available: ${info.version} — downloading…`);
   const win = getActiveWindow();
-  const msgOpts = {
-    type: 'info',
-    title: 'Update Available',
-    message: `Personal OS ${info.version} is available`,
-    detail,
-    buttons: ['OK'],
-  };
   const dlg = win
-    ? dialog.showMessageBox(win, msgOpts)
-    : dialog.showMessageBox(msgOpts);
-  dlg.catch((e) => updaterLog('error', `update-available dialog error: ${e?.message}`));
+    ? dialog.showMessageBox(win, { type: 'info', title: 'Update Available',
+        message: `Personal OS ${info.version} is available`,
+        detail: `Downloading in the background — you'll be notified when it's ready.`,
+        buttons: ['OK'] })
+    : dialog.showMessageBox({ type: 'info', title: 'Update Available',
+        message: `Personal OS ${info.version} is available`,
+        detail: `Downloading in the background — you'll be notified when it's ready.`,
+        buttons: ['OK'] });
+  dlg.catch(() => {});
 });
 
 autoUpdater.on('update-not-available', (info) => {
-  updaterLog('info', `Already up to date (latest: ${info.version})`);
+  updaterLog('info', `[win] Already up to date (latest: ${info.version})`);
 });
 
 autoUpdater.on('download-progress', (progress) => {
   const pct = Math.round(progress.percent);
-  updaterLog('info', `Downloading… ${pct}% (${Math.round(progress.bytesPerSecond / 1024)} KB/s)`);
+  updaterLog('info', `[win] Downloading… ${pct}%`);
   const win = getActiveWindow();
   if (win) {
     win.setProgressBar(progress.percent / 100);
@@ -419,62 +467,44 @@ autoUpdater.on('download-progress', (progress) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  updaterLog('info', `Download complete: ${info.version} — showing restart dialog`);
-
+  updaterLog('info', `[win] Download complete: ${info.version}`);
   const win = getActiveWindow();
-  if (win && !win.isDestroyed()) {
-    win.setProgressBar(-1);
-    win.setTitle('Personal OS');
-  }
-
-  const rawNotes = typeof info.releaseNotes === 'string'
-    ? info.releaseNotes
-    : Array.isArray(info.releaseNotes)
-      ? info.releaseNotes.map((r) => r.note || '').join('\n')
-      : '';
-  const notes = rawNotes.replace(/<[^>]+>/g, '').trim();
-
-  const detail = [
-    notes ? `What's new in ${info.version}:\n${notes}` : `Version ${info.version} is ready.`,
-    '',
-    'Restart now to apply the update.',
-  ].filter(Boolean).join('\n');
+  if (win && !win.isDestroyed()) { win.setProgressBar(-1); win.setTitle('Personal OS'); }
 
   const dlOpts = {
-    type: 'info',
-    title: 'Update Ready to Install',
+    type: 'info', title: 'Update Ready to Install',
     message: `Personal OS ${info.version} downloaded`,
-    detail,
-    buttons: ['Restart Now', 'Later'],
-    defaultId: 0,
-    cancelId: 1,
+    detail: 'Restart now to apply the update.',
+    buttons: ['Restart Now', 'Later'], defaultId: 0, cancelId: 1,
   };
-
   try {
-    const win2 = getActiveWindow();
-    const choice = win2
-      ? dialog.showMessageBoxSync(win2, dlOpts)
-      : dialog.showMessageBoxSync(dlOpts);
-    updaterLog('info', `Restart dialog choice: ${choice === 0 ? 'Restart Now' : 'Later'}`);
+    const win2  = getActiveWindow();
+    const choice = win2 ? dialog.showMessageBoxSync(win2, dlOpts) : dialog.showMessageBoxSync(dlOpts);
+    updaterLog('info', `[win] Restart choice: ${choice === 0 ? 'Now' : 'Later'}`);
     if (choice === 0) autoUpdater.quitAndInstall();
   } catch (e) {
-    updaterLog('error', `update-downloaded dialog error: ${e?.message}`);
-    // Last resort: just install silently
+    updaterLog('error', `[win] Restart dialog error: ${e?.message}`);
     autoUpdater.quitAndInstall();
   }
 });
 
 autoUpdater.on('error', (err) => {
-  updaterLog('error', `autoUpdater error: ${err?.message ?? err}\n${err?.stack ?? ''}`);
-  // Show a visible dialog so the user knows something went wrong
-  const win = getActiveWindow();
-  const logHint = `\n\nLog: ${path.join(app.getPath('userData'), 'updater.log')}`;
-  const msg = `Auto-update encountered an error:\n${err?.message ?? err}${logHint}`;
-  try {
-    if (win) dialog.showMessageBox(win, { type: 'warning', title: 'Update Error', message: msg, buttons: ['OK'] }).catch(() => {});
-    else dialog.showMessageBox({ type: 'warning', title: 'Update Error', message: msg, buttons: ['OK'] }).catch(() => {});
-  } catch { /* ignore dialog errors */ }
+  updaterLog('error', `[win] autoUpdater error: ${err?.message ?? err}`);
 });
+
+// ── checkForUpdates — routes by platform ─────────────────────────────────────
+
+function checkForUpdates() {
+  if (IS_DEV) { updaterLog('info', 'Dev mode — skipping'); return; }
+  if (IS_MAC) {
+    checkForUpdatesMac();          // GitHub API — no Squirrel, no signature check
+  } else {
+    updaterLog('info', `[win] Checking for updates (current: ${app.getVersion()})`);
+    autoUpdater.checkForUpdates().catch((err) => {
+      updaterLog('error', `[win] checkForUpdates threw: ${err?.message ?? err}`);
+    });
+  }
+}
 
 // IPC: allow the Settings page to trigger a manual update check
 ipcMain.handle('check-for-updates', () => {

@@ -247,7 +247,7 @@ function createMainWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      // No preload needed — the app is at http://localhost, uses its own API
+      preload: path.join(__dirname, 'preload.js'),
     },
     show: false,
   });
@@ -315,17 +315,65 @@ ipcMain.handle('activate', async (_event, key) => {
   }
 });
 
-// ── Auto-updater ──────────────────────────────────────────────────────────────
+// ── Auto-updater logging ──────────────────────────────────────────────────────
 
-function checkForUpdates() {
-  if (IS_DEV) return;
-  autoUpdater.checkForUpdates();
+let _logPath = null;
+function updaterLog(level, msg) {
+  const line = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${msg}\n`;
+  console.log('[updater]', msg);
+  try {
+    if (!_logPath) _logPath = path.join(app.getPath('userData'), 'updater.log');
+    // Keep log under 200 KB — truncate if larger
+    try {
+      const stat = fs.statSync(_logPath);
+      if (stat.size > 200_000) fs.writeFileSync(_logPath, line, 'utf8');
+      else fs.appendFileSync(_logPath, line, 'utf8');
+    } catch {
+      fs.writeFileSync(_logPath, line, 'utf8');
+    }
+  } catch { /* never crash because of logging */ }
 }
 
-autoUpdater.on('update-available', (info) => {
-  console.log('[updater] Update available:', info.version);
+// Wire electron-updater's internal logger to our file
+autoUpdater.logger = {
+  info:  (m) => updaterLog('info',  typeof m === 'object' ? JSON.stringify(m) : m),
+  warn:  (m) => updaterLog('warn',  typeof m === 'object' ? JSON.stringify(m) : m),
+  error: (m) => updaterLog('error', typeof m === 'object' ? JSON.stringify(m) : m),
+  debug: (m) => updaterLog('debug', typeof m === 'object' ? JSON.stringify(m) : m),
+};
 
-  // Strip HTML tags from release notes (GitHub returns HTML)
+// ── Auto-updater ──────────────────────────────────────────────────────────────
+
+function getActiveWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  return BrowserWindow.getFocusedWindow()
+    ?? BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    ?? null;
+}
+
+function checkForUpdates() {
+  if (IS_DEV) {
+    updaterLog('info', 'Dev mode — skipping update check');
+    return;
+  }
+  updaterLog('info', `Checking for updates (current: ${app.getVersion()})`);
+  autoUpdater.checkForUpdates().catch((err) => {
+    updaterLog('error', `checkForUpdates() threw: ${err?.message ?? err}`);
+    // Show visible error so we know it failed
+    const win = getActiveWindow();
+    const msg = `Update check failed:\n${err?.message ?? err}\n\nCheck ${path.join(app.getPath('userData'), 'updater.log')} for details.`;
+    if (win) dialog.showMessageBox(win, { type: 'error', title: 'Update Check Failed', message: msg, buttons: ['OK'] }).catch(() => {});
+    else dialog.showMessageBox({ type: 'error', title: 'Update Check Failed', message: msg, buttons: ['OK'] }).catch(() => {});
+  });
+}
+
+autoUpdater.on('checking-for-update', () => {
+  updaterLog('info', 'Contacting GitHub releases…');
+});
+
+autoUpdater.on('update-available', (info) => {
+  updaterLog('info', `Update available: ${info.version}`);
+
   const rawNotes = typeof info.releaseNotes === 'string'
     ? info.releaseNotes
     : Array.isArray(info.releaseNotes)
@@ -335,15 +383,11 @@ autoUpdater.on('update-available', (info) => {
 
   const detail = [
     `Version ${info.version} is available (you have ${app.getVersion()}).`,
-    '',
-    notes ? `What's new:\n${notes}` : '',
-    '',
-    'Downloading in the background — you\'ll be notified when it\'s ready to install.',
-  ].filter(Boolean).join('\n');
+    notes ? `\nWhat's new:\n${notes}` : '',
+    '\nDownloading in the background — you\'ll be notified when it\'s ready to install.',
+  ].filter(Boolean).join('');
 
-  const win = (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null)
-    ?? BrowserWindow.getFocusedWindow()
-    ?? BrowserWindow.getAllWindows()[0];
+  const win = getActiveWindow();
   const msgOpts = {
     type: 'info',
     title: 'Update Available',
@@ -351,30 +395,35 @@ autoUpdater.on('update-available', (info) => {
     detail,
     buttons: ['OK'],
   };
-  if (win) dialog.showMessageBox(win, msgOpts);
-  else dialog.showMessageBox(msgOpts);
+  const dlg = win
+    ? dialog.showMessageBox(win, msgOpts)
+    : dialog.showMessageBox(msgOpts);
+  dlg.catch((e) => updaterLog('error', `update-available dialog error: ${e?.message}`));
 });
 
-autoUpdater.on('update-not-available', () => {
-  console.log('[updater] App is up to date');
+autoUpdater.on('update-not-available', (info) => {
+  updaterLog('info', `Already up to date (latest: ${info.version})`);
 });
 
 autoUpdater.on('download-progress', (progress) => {
   const pct = Math.round(progress.percent);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setProgressBar(progress.percent / 100);
-    mainWindow.setTitle(`Personal OS — Downloading update ${pct}%`);
+  updaterLog('info', `Downloading… ${pct}% (${Math.round(progress.bytesPerSecond / 1024)} KB/s)`);
+  const win = getActiveWindow();
+  if (win) {
+    win.setProgressBar(progress.percent / 100);
+    win.setTitle(`Personal OS — Downloading update ${pct}%`);
   }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  // Reset progress bar
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setProgressBar(-1);
-    mainWindow.setTitle('Personal OS');
+  updaterLog('info', `Download complete: ${info.version} — showing restart dialog`);
+
+  const win = getActiveWindow();
+  if (win && !win.isDestroyed()) {
+    win.setProgressBar(-1);
+    win.setTitle('Personal OS');
   }
 
-  // Strip HTML from release notes
   const rawNotes = typeof info.releaseNotes === 'string'
     ? info.releaseNotes
     : Array.isArray(info.releaseNotes)
@@ -388,9 +437,6 @@ autoUpdater.on('update-downloaded', (info) => {
     'Restart now to apply the update.',
   ].filter(Boolean).join('\n');
 
-  const win2 = (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null)
-    ?? BrowserWindow.getFocusedWindow()
-    ?? BrowserWindow.getAllWindows()[0];
   const dlOpts = {
     type: 'info',
     title: 'Update Ready to Install',
@@ -400,15 +446,38 @@ autoUpdater.on('update-downloaded', (info) => {
     defaultId: 0,
     cancelId: 1,
   };
-  const choice = win2
-    ? dialog.showMessageBoxSync(win2, dlOpts)
-    : dialog.showMessageBoxSync(dlOpts);
 
-  if (choice === 0) autoUpdater.quitAndInstall();
+  try {
+    const win2 = getActiveWindow();
+    const choice = win2
+      ? dialog.showMessageBoxSync(win2, dlOpts)
+      : dialog.showMessageBoxSync(dlOpts);
+    updaterLog('info', `Restart dialog choice: ${choice === 0 ? 'Restart Now' : 'Later'}`);
+    if (choice === 0) autoUpdater.quitAndInstall();
+  } catch (e) {
+    updaterLog('error', `update-downloaded dialog error: ${e?.message}`);
+    // Last resort: just install silently
+    autoUpdater.quitAndInstall();
+  }
 });
 
 autoUpdater.on('error', (err) => {
-  console.error('[updater] Error:', err.message);
+  updaterLog('error', `autoUpdater error: ${err?.message ?? err}\n${err?.stack ?? ''}`);
+  // Show a visible dialog so the user knows something went wrong
+  const win = getActiveWindow();
+  const logHint = `\n\nLog: ${path.join(app.getPath('userData'), 'updater.log')}`;
+  const msg = `Auto-update encountered an error:\n${err?.message ?? err}${logHint}`;
+  try {
+    if (win) dialog.showMessageBox(win, { type: 'warning', title: 'Update Error', message: msg, buttons: ['OK'] }).catch(() => {});
+    else dialog.showMessageBox({ type: 'warning', title: 'Update Error', message: msg, buttons: ['OK'] }).catch(() => {});
+  } catch { /* ignore dialog errors */ }
+});
+
+// IPC: allow the Settings page to trigger a manual update check
+ipcMain.handle('check-for-updates', () => {
+  updaterLog('info', 'Manual update check requested from renderer');
+  checkForUpdates();
+  return { ok: true, logPath: _logPath ?? path.join(app.getPath('userData'), 'updater.log') };
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────

@@ -1597,6 +1597,56 @@ function NotificationSettingsPanel() {
   );
 }
 
+// ── Update checker button ─────────────────────────────────────────────────────
+
+function UpdateChecker() {
+  const [status, setStatus] = useState<'idle' | 'checking' | 'done' | 'error'>('idle');
+
+  async function handleCheck() {
+    setStatus('checking');
+    try {
+      // @ts-ignore — window.electronAPI injected by Electron preload (if available)
+      const ipc = (window as any).electronAPI;
+      if (ipc?.checkForUpdates) {
+        await ipc.checkForUpdates();
+        setStatus('done');
+      } else {
+        // Running in browser/dev — no Electron IPC
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+    setTimeout(() => setStatus('idle'), 4000);
+  }
+
+  const label =
+    status === 'checking' ? 'Checking…' :
+    status === 'done'     ? 'Check sent ✓' :
+    status === 'error'    ? 'Not available' :
+    'Check for updates';
+
+  return (
+    <button
+      type="button"
+      onClick={handleCheck}
+      disabled={status === 'checking'}
+      style={{
+        height: 28, padding: '0 12px', borderRadius: 8,
+        fontSize: 11.5, fontWeight: 500,
+        color: status === 'done' ? '#6EE7B7' : status === 'error' ? 'var(--fg-4)' : 'var(--fg-3)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'transparent',
+        cursor: status === 'checking' ? 'default' : 'pointer',
+        transition: 'color 200ms',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ── Settings page ────────────────────────────────────────────────────────────
 
 export function Settings() {
@@ -2218,10 +2268,10 @@ export function Settings() {
           </div>
         </section>
 
-        {/* ── App version ─────────────────────────────────────────────────── */}
+        {/* ── App version + update check ────────────────────────────────── */}
         <section style={{ marginTop: 32 }}>
           <div
-            className="flex items-center gap-3 px-1"
+            className="flex items-center gap-3"
             style={{
               padding: '12px 16px',
               borderRadius: 12,
@@ -2238,6 +2288,7 @@ export function Settings() {
                 v{appVersion}
               </span>
             </div>
+            <UpdateChecker />
           </div>
         </section>
 

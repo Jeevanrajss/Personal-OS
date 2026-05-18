@@ -62,6 +62,8 @@ jobs:
         with:
           files: |
             electron/dist/*.dmg
+            electron/dist/*.zip
+            electron/dist/*.blockmap
             electron/dist/latest-mac.yml
           generate_release_notes: true
           body: |

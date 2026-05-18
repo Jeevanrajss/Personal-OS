@@ -27,6 +27,7 @@ env/
 node_modules/
 dist/
 build/
+!electron/build/
 .vite/
 *.tsbuildinfo
 vite.config.ts.timestamp-*.mjs

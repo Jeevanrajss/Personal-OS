@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,13 +66,30 @@ def create_app() -> FastAPI:
     app.include_router(sms.router)
     app.include_router(notifications.router)
 
-    @app.get("/")
-    def root():
-        return {
-            "app": cfg.app_name,
-            "docs": "/docs",
-            "health": "/api/v1/health",
-        }
+    # Version endpoint — used by Electron to check running version
+    @app.get("/api/v1/app-version")
+    def app_version():
+        return {"version": cfg.app_version}
+
+    if cfg.app_env == "production":
+        # Packaged app: serve the built React frontend at "/"
+        # Mount AFTER all API routers so /api/* routes take precedence
+        dist_path = Path(cfg.frontend_dist) if cfg.frontend_dist else None
+        if dist_path and dist_path.exists():
+            from fastapi.staticfiles import StaticFiles
+            app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
+            log.info("Serving frontend from %s", dist_path)
+        else:
+            log.warning("Production mode but FRONTEND_DIST not set or missing: %s", dist_path)
+    else:
+        # Dev mode: simple root redirect
+        @app.get("/")
+        def root():
+            return {
+                "app": cfg.app_name,
+                "docs": "/docs",
+                "health": "/api/v1/health",
+            }
 
     return app
 

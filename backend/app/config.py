@@ -1,10 +1,27 @@
 """Runtime settings — loaded from .env."""
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+
+def _default_db_path() -> str:
+    """Use PERSONAL_OS_DATA_DIR (set by Electron) when running as packaged app."""
+    data_dir = os.environ.get("PERSONAL_OS_DATA_DIR", "")
+    if data_dir:
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        return str(Path(data_dir) / "north-os.db")
+    return str(ROOT_DIR / "data" / "north-os.db")
+
+
+def _default_db_encryption() -> bool:
+    """Disable SQLCipher in packaged mode (Windows compatibility)."""
+    if os.environ.get("PERSONAL_OS_DATA_DIR"):
+        return False
+    return True
 
 
 class Settings(BaseSettings):
@@ -19,13 +36,18 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
+    app_version: str = "1.0.0"
     timezone: str = "Asia/Kolkata"
     currency: str = "INR"
 
     # Database
-    db_path: str = str(ROOT_DIR / "data" / "north-os.db")
-    db_encryption: bool = True  # SQLCipher on by default
+    db_path: str = ""  # resolved below via default_factory logic
+    db_encryption: bool = True
     db_passphrase: str = "change-me-in-dotenv"
+
+    # Packaged app paths (set by Electron / run.py before importing this module)
+    personal_os_data_dir: str = ""   # OS app-data dir — overrides db_path
+    frontend_dist: str = ""          # Path to built React app served in production
 
     # LLM server — LM Studio by default, but any OpenAI-compatible endpoint works
     # (Ollama with /v1 compatibility, OpenAI, vLLM, llama.cpp server, etc.)
@@ -37,6 +59,14 @@ class Settings(BaseSettings):
 
     # Offline guard
     offline_mode: bool = False  # When true, middleware blocks non-local outbound
+
+    def model_post_init(self, __context) -> None:  # type: ignore[override]
+        # Resolve db_path: env-var override → .env value → default
+        if not self.db_path:
+            object.__setattr__(self, "db_path", _default_db_path())
+        # Disable encryption when running as packaged app
+        if self.personal_os_data_dir and self.db_encryption:
+            object.__setattr__(self, "db_encryption", False)
 
 
 @lru_cache

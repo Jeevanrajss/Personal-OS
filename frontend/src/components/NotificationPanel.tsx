@@ -39,7 +39,7 @@ export function NotificationBell() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef<number>(0);
+  const prevCountRef = useRef<number>(-1);
 
   // Poll unread count every 30s
   const { data: countData } = useQuery({

@@ -34,7 +34,7 @@
     "extraResources": [
       {
         "from": "../backend/dist/personal-os-backend",
-        "to": "backend",
+        "to": "backend/personal-os-backend",
         "filter": ["**/*"]
       }
     ],

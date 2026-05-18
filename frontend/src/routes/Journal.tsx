@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { addDays, format, getISOWeek } from 'date-fns';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MonthCalendar } from '@/components/journal/MonthCalendar';
 import { StreakCard } from '@/components/journal/StreakCard';
 import { MoodSparkline } from '@/components/journal/MoodSparkline';
 import { TagCloud } from '@/components/journal/TagCloud';
 import { JournalAnnualCard } from '@/components/journal/JournalAnnualCard';
 import { MoodHabitCard } from '@/components/journal/MoodHabitCard';
-import { JournalSearch } from '@/components/journal/JournalSearch';
 import { JournalExportButton } from '@/components/journal/JournalExportButton';
 import { JournalDayContent } from '@/components/journal/JournalDayContent';
 import { startOfMonth } from '@/lib/date';
@@ -166,35 +165,6 @@ export function Journal() {
           {/* Spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* Search hint */}
-          <div
-            className="flex items-center gap-2"
-            style={{
-              height: 36, padding: '0 12px',
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: 10,
-              color: '#7B8498', fontSize: 13,
-              minWidth: 220,
-            }}
-          >
-            <Search className="w-3.5 h-3.5 shrink-0" />
-            <span>Search journal…</span>
-            <kbd
-              className="ml-auto"
-              style={{
-                fontFamily: 'JetBrains Mono, Menlo, monospace',
-                fontSize: 10, fontWeight: 500,
-                background: '#1C2030',
-                border: '1px solid rgba(255,255,255,0.08)',
-                padding: '3px 6px', borderRadius: 6,
-                color: '#7B8498',
-              }}
-            >
-              ⌘K
-            </kbd>
-          </div>
-
           {/* Export */}
           <JournalExportButton />
         </div>
@@ -285,10 +255,6 @@ export function Journal() {
           <JournalAnnualCard />
         </div>
 
-        {/* Semantic search */}
-        <div className="mt-4">
-          <JournalSearch />
-        </div>
       </div>
     </div>
   );

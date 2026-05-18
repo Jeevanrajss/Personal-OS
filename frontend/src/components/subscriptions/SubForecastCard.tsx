@@ -40,15 +40,15 @@ export function SubForecastCard() {
       <div className="flex items-center justify-between mb-1">
         <div className="card-title mb-0">12-month billing forecast</div>
         {mixedCurrencies && (
-          <span className="text-[10px] text-ink-600">mixed currencies</span>
+          <span className="text-[10px] text-ink-400">mixed currencies</span>
         )}
       </div>
-      <p className="text-[11px] text-ink-600 mb-4">
+      <p className="text-[11px] text-ink-400 mb-4">
         Upcoming bills month by month — spikes = annual/quarterly renewals
       </p>
 
       {isLoading ? (
-        <div className="h-24 flex items-center justify-center text-xs text-ink-600">Loading…</div>
+        <div className="h-24 flex items-center justify-center text-xs text-ink-400">Loading…</div>
       ) : (
         <>
           {/* Bar chart */}
@@ -102,7 +102,7 @@ export function SubForecastCard() {
                 <div key={m.year_month} className="flex-1 flex flex-col items-center">
                   <span className={cn(
                     'text-[9px] truncate',
-                    isCurrent ? 'text-accent font-semibold' : 'text-ink-600',
+                    isCurrent ? 'text-accent font-semibold' : 'text-ink-400',
                   )}>
                     {m.year_month.slice(5)}
                   </span>
@@ -119,13 +119,13 @@ export function SubForecastCard() {
             const peak = months.reduce((best, m) => m.total > best.total ? m : best, months[0]);
             if (peak.total <= 0) return null;
             return (
-              <div className="mt-3 pt-3 border-t border-ink-900 text-[11px] text-ink-500">
+              <div className="mt-3 pt-3 border-t border-white/5 text-[11px] text-ink-400">
                 Highest spend:{' '}
                 <span className="text-ink-300 font-medium">{formatYM(peak.year_month)}</span>
                 {' — '}
                 <span className="text-ink-300">{peak.currency} {peak.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                 {' '}
-                <span className="text-ink-600">({peak.bill_count} bills)</span>
+                <span className="text-ink-500">({peak.bill_count} bills)</span>
               </div>
             );
           })()}

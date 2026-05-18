@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
 import { api, type MonthlySummary } from '@/lib/api';
-import { cn } from '@/lib/cn';
 
 function fmt(amount: number, currency = 'INR') {
   try {
@@ -18,11 +16,39 @@ function prevMonth(year: number, month: number): [number, number] {
   return month === 1 ? [year - 1, 12] : [year, month - 1];
 }
 
+// Category → colored dot
+const CAT_COLORS: Record<string, string> = {
+  subscriptions:  'var(--primary-500)',
+  food:           'var(--secondary-500)',
+  dining:         'var(--secondary-500)',
+  transport:      'var(--accent-yellow)',
+  travel:         'var(--accent-yellow)',
+  shopping:       'var(--accent-green)',
+  entertainment:  'var(--accent-pink)',
+  health:         '#FF7AD9',
+  utilities:      '#7FDBFF',
+};
+
+function catColor(name: string): string {
+  const k = name.toLowerCase();
+  for (const [key, color] of Object.entries(CAT_COLORS)) {
+    if (k.includes(key)) return color;
+  }
+  // Rotate through palette based on hash
+  const palette = ['var(--primary-500)', 'var(--secondary-500)', 'var(--accent-yellow)', 'var(--accent-green)', 'var(--accent-pink)'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return palette[Math.abs(hash) % palette.length];
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 export function DashFinanceCard() {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
   const [py, pm] = prevMonth(y, m);
+  const monthName = MONTH_NAMES[m - 1];
 
   const { data: curr, isLoading } = useQuery<MonthlySummary>({
     queryKey: ['finance-summary', y, m],
@@ -36,110 +62,112 @@ export function DashFinanceCard() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Nothing to show if no transactions
   if (!isLoading && (curr?.transaction_count ?? 0) === 0 && (prev?.transaction_count ?? 0) === 0) {
     return null;
   }
 
-  const expense = curr?.total_expense ?? 0;
+  const currency   = localStorage.getItem('sub_display_currency') ?? 'INR';
+  const expense    = curr?.total_expense  ?? 0;
   const prevExpense = prev?.total_expense ?? 0;
-  const delta = prevExpense > 0 ? ((expense - prevExpense) / prevExpense) * 100 : null;
-  const up = delta !== null && delta > 0;
-  const down = delta !== null && delta < 0;
-
-  // Top categories (max 4)
-  const topCats = (curr?.by_category ?? []).slice(0, 4);
-  const maxCat = Math.max(1, ...topCats.map((c) => c.total));
-
-  const currency = localStorage.getItem('sub_display_currency') ?? 'INR';
+  const delta      = prevExpense > 0 ? expense - prevExpense : null;
+  const topCats    = (curr?.by_category ?? []).slice(0, 4);
+  const maxCat     = Math.max(1, ...topCats.map((c) => c.total));
+  const budget     = curr?.budget_overall;
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div className="card-title mb-0">Finance</div>
-        <Link to="/finance" className="flex items-center gap-1 text-[11px] text-ink-500 hover:text-accent transition-colors">
-          View all <ArrowRight className="w-3 h-3" />
+    <div className="card" style={{ padding: 22 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h3 style={{ margin: 0, font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)' }}>
+          This month · {monthName}
+        </h3>
+        <Link
+          to="/app/finance"
+          style={{
+            height: 30, padding: '0 12px', borderRadius: 8,
+            display: 'inline-flex', alignItems: 'center',
+            font: '500 12px/1 var(--font-sans)',
+            color: 'var(--fg-2)', border: '1px solid var(--border-default)',
+            background: 'var(--glass-bg)', textDecoration: 'none', transition: 'var(--transition)',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border-strong)'; (e.currentTarget as HTMLAnchorElement).style.color = 'var(--fg-1)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border-default)'; (e.currentTarget as HTMLAnchorElement).style.color = 'var(--fg-2)'; }}
+        >
+          Open →
         </Link>
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[80, 55, 65].map((w, i) => (
-            <div key={i} className="h-3 bg-ink-900 rounded animate-pulse" style={{ width: `${w}%` }} />
+            <div key={i} style={{ height: 12, background: 'var(--surface-hover)', borderRadius: 6, width: `${w}%`, animation: 'pulse 1.5s infinite' }} />
           ))}
         </div>
       ) : (
         <>
-          {/* Total + delta */}
-          <div className="flex items-baseline gap-2 mb-3">
-            <span className="text-xl font-semibold tabular-nums text-ink-100">
-              {fmt(expense, currency)}
-            </span>
-            <span className="text-[11px] text-ink-500">this month</span>
+          {/* Big amount + delta */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div>
+              <div style={{ font: '500 36px/1 var(--font-display)', letterSpacing: '-0.02em', color: 'var(--fg-1)' }}>
+                {fmt(expense, currency)}
+                <small style={{ fontSize: 13, color: 'var(--fg-3)', fontWeight: 400, marginLeft: 8 }}>spent</small>
+              </div>
+              {budget && budget.budget > 0 && (
+                <div style={{ color: 'var(--fg-4)', fontSize: 11.5, marginTop: 6 }}>
+                  Budget {fmt(budget.budget, currency)} · {budget.pct.toFixed(1)}%
+                </div>
+              )}
+            </div>
             {delta !== null && (
-              <span className={cn(
-                'ml-auto flex items-center gap-0.5 text-[11px] font-medium tabular-nums',
-                up ? 'text-red-400' : down ? 'text-emerald-400' : 'text-ink-500',
-              )}>
-                {up
-                  ? <TrendingUp className="w-3 h-3" />
-                  : down
-                    ? <TrendingDown className="w-3 h-3" />
-                    : null}
-                {up ? '+' : ''}{delta.toFixed(0)}% vs last month
-              </span>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                color: delta < 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                fontSize: 12, fontWeight: 500,
+              }}>
+                {delta < 0 ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="19 12 12 19 5 12" /><line x1="12" y1="5" x2="12" y2="19" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="19 12 12 5 5 12" /><line x1="12" y1="19" x2="12" y2="5" />
+                  </svg>
+                )}
+                {fmt(Math.abs(delta), currency)} vs last
+              </div>
             )}
           </div>
 
-          {/* Category bars */}
+          {/* Category rows */}
           {topCats.length > 0 ? (
-            <ul className="space-y-2">
-              {topCats.map((cat) => (
-                <li key={cat.category} className="space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-ink-400 truncate max-w-[60%]">{cat.category}</span>
-                    <span className="text-[11px] text-ink-500 tabular-nums">{fmt(cat.total, currency)}</span>
+            <div style={{ display: 'grid', gap: 14 }}>
+              {topCats.map((cat) => {
+                const color = catColor(cat.category);
+                const barPct = (cat.total / maxCat) * 100;
+                return (
+                  <div key={cat.category} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: 'var(--fg-1)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 999, background: color, display: 'inline-block', flexShrink: 0 }} />
+                      {cat.category}
+                    </div>
+                    <div style={{ color: 'var(--fg-3)', fontSize: 12.5, fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
+                      {fmt(cat.total, currency)}
+                    </div>
+                    <div style={{ gridColumn: '1 / -1', height: 4, borderRadius: 999, background: 'var(--surface-hover)', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', width: `${barPct}%`,
+                        background: `linear-gradient(90deg, ${color}, ${color}88)`,
+                        borderRadius: 999, transition: 'width 500ms',
+                      }} />
+                    </div>
                   </div>
-                  <div className="h-1 bg-ink-900 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent/50 rounded-full"
-                      style={{ width: `${(cat.total / maxCat) * 100}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-ink-600 text-center py-2">No expenses recorded this month.</p>
-          )}
-
-          {/* Budget progress if set */}
-          {curr?.budget_overall && curr.budget_overall.budget > 0 && (
-            <div className="mt-3 pt-3 border-t border-ink-900 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-ink-600 uppercase tracking-wide">Budget</span>
-                <span className={cn(
-                  'text-[11px] tabular-nums font-medium',
-                  curr.budget_overall.pct > 100 ? 'text-red-400' :
-                  curr.budget_overall.pct > 80 ? 'text-amber-400' : 'text-emerald-400',
-                )}>
-                  {curr.budget_overall.pct.toFixed(0)}% used
-                </span>
-              </div>
-              <div className="h-1 bg-ink-900 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all',
-                    curr.budget_overall.pct > 100 ? 'bg-red-500' :
-                    curr.budget_overall.pct > 80 ? 'bg-amber-400' : 'bg-emerald-500',
-                  )}
-                  style={{ width: `${Math.min(curr.budget_overall.pct, 100)}%` }}
-                />
-              </div>
-              <div className="text-[10px] text-ink-600">
-                {fmt(curr.budget_overall.spent, currency)} of {fmt(curr.budget_overall.budget, currency)}
-              </div>
+                );
+              })}
             </div>
+          ) : (
+            <p style={{ fontSize: 12, color: 'var(--fg-4)', textAlign: 'center', padding: '8px 0' }}>
+              No expenses this month.
+            </p>
           )}
         </>
       )}

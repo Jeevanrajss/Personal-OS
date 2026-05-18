@@ -150,9 +150,30 @@ async def _complete_anthropic(
         try:
             r = await client.post(url, json=payload, headers=headers)
             r.raise_for_status()
+        except httpx.ConnectError as e:
+            raise LLMError(
+                f"Cannot reach Anthropic at {base}. Check your internet connection."
+            ) from e
+        except httpx.ConnectTimeout as e:
+            raise LLMError(
+                f"Connection to {base} timed out. Check your internet connection."
+            ) from e
         except httpx.HTTPStatusError as e:
-            body = e.response.text
-            raise LLMError(f"Anthropic API error {e.response.status_code}: {body}") from e
+            status = e.response.status_code
+            if status in (401, 403):
+                raise LLMError(
+                    f"API key rejected ({status}). Open Settings → AI Provider and check your Anthropic key."
+                ) from e
+            elif status == 404:
+                raise LLMError(
+                    f"Model '{model}' not found (404). Check the model name in Settings."
+                ) from e
+            elif status == 503:
+                raise LLMError(
+                    "Anthropic is temporarily unavailable (503). Try again in a moment."
+                ) from e
+            else:
+                raise LLMError(f"Anthropic API error {status}: {e.response.text}") from e
         except httpx.HTTPError as e:
             raise LLMError(f"Anthropic request failed: {e}") from e
 
@@ -188,9 +209,39 @@ async def _complete(
         try:
             r = await client.post(url, json=payload, headers=headers)
             r.raise_for_status()
+        except httpx.ConnectError as e:
+            host = cfg.get("api_base", url)
+            raise LLMError(
+                f"Cannot reach LLM server at {host}. "
+                "Make sure it is running and reachable from this machine. "
+                "For LM Studio/Ollama on the same computer use http://127.0.0.1:1234/v1"
+            ) from e
+        except httpx.ConnectTimeout as e:
+            host = cfg.get("api_base", url)
+            raise LLMError(
+                f"Connection to {host} timed out. "
+                "Check the host address and that no firewall is blocking the port."
+            ) from e
         except httpx.HTTPStatusError as e:
-            body = e.response.text
-            raise LLMError(f"LLM API error {e.response.status_code}: {body}") from e
+            status = e.response.status_code
+            if status in (401, 403):
+                raise LLMError(
+                    f"API key rejected ({status}). "
+                    "Open Settings → AI Provider and check your API key."
+                ) from e
+            elif status == 404:
+                model_name = payload.get("model", cfg.get("chat_model", ""))
+                raise LLMError(
+                    f"Model '{model_name}' not found (404). "
+                    "Check the model name in Settings → AI Provider."
+                ) from e
+            elif status == 503:
+                raise LLMError(
+                    "LLM server returned 503 — it may be busy or still loading a model. "
+                    "Try again in a moment."
+                ) from e
+            else:
+                raise LLMError(f"LLM API error {status}: {e.response.text}") from e
         except httpx.HTTPError as e:
             raise LLMError(f"LLM request failed: {e}") from e
 
@@ -363,10 +414,79 @@ async def list_models() -> list[str]:
         try:
             r = await client.get(url, headers=headers)
             r.raise_for_status()
+        except httpx.ConnectError as e:
+            raise LLMError(
+                f"Cannot reach LLM server at {base}. "
+                "Make sure it is running and reachable from this machine."
+            ) from e
+        except httpx.ConnectTimeout as e:
+            raise LLMError(f"Connection to {base} timed out.") from e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                raise LLMError("API key rejected. Check your key in Settings → AI Provider.") from e
+            raise LLMError(f"LLM server error {e.response.status_code}.") from e
         except httpx.HTTPError as e:
             raise LLMError(f"Cannot reach LLM server: {e}") from e
 
     return [m.get("id", "") for m in r.json().get("data", [])]
+
+
+async def quick_health() -> dict[str, Any]:
+    """Fast reachability probe (5 s timeout). Used by the Settings UI on load.
+
+    Returns ``ok=True``  when the server answers,
+            ``ok=False`` with a human-readable ``error`` when it cannot,
+            ``ok=None``  for Anthropic (no cheap probe available — use test-llm).
+    """
+    cfg = _load_config()
+    provider = cfg.get("provider", "local")
+    host = cfg.get("api_base", "")
+
+    if cfg.get("is_anthropic") == "true":
+        return {
+            "ok": None,
+            "provider": provider,
+            "host": host,
+            "models": [],
+            "error": None,
+            "note": "Use 'Test connection' to verify your Anthropic key.",
+        }
+
+    base = host.rstrip("/")
+    url = f"{base}/models"
+    headers = _get_headers(cfg)
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+        models = [m.get("id", "") for m in r.json().get("data", [])]
+        return {"ok": True, "provider": provider, "host": host, "models": models, "error": None, "note": None}
+    except httpx.ConnectError:
+        return {
+            "ok": False, "provider": provider, "host": host, "models": [],
+            "error": (
+                f"Cannot reach {host}. "
+                "If using LM Studio or Ollama on this computer, set the URL to "
+                "http://127.0.0.1:1234/v1 (LM Studio) or http://127.0.0.1:11434/v1 (Ollama)."
+            ),
+            "note": None,
+        }
+    except httpx.ConnectTimeout:
+        return {
+            "ok": False, "provider": provider, "host": host, "models": [],
+            "error": f"Connection to {host} timed out. Check the address and any firewall rules.",
+            "note": None,
+        }
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status in (401, 403):
+            error = "API key rejected. Check your key in Settings → AI Provider."
+        else:
+            error = f"Server returned {status}."
+        return {"ok": False, "provider": provider, "host": host, "models": [], "error": error, "note": None}
+    except Exception as e:
+        return {"ok": False, "provider": provider, "host": host, "models": [], "error": str(e), "note": None}
 
 
 async def health() -> dict[str, Any]:

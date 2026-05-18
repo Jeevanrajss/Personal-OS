@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     # App
-    app_name: str = "Personal OS"
+    app_name: str = "North OS"
     app_env: str = "dev"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     currency: str = "INR"
 
     # Database
-    db_path: str = str(ROOT_DIR / "data" / "personal-os.db")
+    db_path: str = str(ROOT_DIR / "data" / "north-os.db")
     db_encryption: bool = True  # SQLCipher on by default
     db_passphrase: str = "change-me-in-dotenv"
 

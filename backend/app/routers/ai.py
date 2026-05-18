@@ -240,7 +240,8 @@ async def subscription_insights(db: Session = Depends(get_db)):
         "You are analysing someone's subscription spending. "
         "Give 3–4 short, specific insights: which categories dominate, any consolidation opportunities, "
         "paused subs worth cancelling, renewals to watch. "
-        "Output ONLY a numbered list — no headers, no preamble."
+        "Output ONLY a numbered list — no headers, no preamble. "
+        "Use **bold** (markdown double-asterisks) around subscription names and key amounts so they stand out at a glance."
     )
 
     try:

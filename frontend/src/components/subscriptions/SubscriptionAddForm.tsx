@@ -3,12 +3,12 @@ import { type BillingCycle, type PaymentType, type SubscriptionIn } from '@/lib/
 import { cn } from '@/lib/cn';
 import { EmojiPickerPopover } from '@/components/habits/EmojiPickerPopover';
 import {
-  ACCOUNT_SUGGESTIONS,
   CATEGORIES,
   CURRENCY_OPTS,
   CYCLE_OPTS,
   PAYMENT_TYPE_OPTS,
 } from './subUtils';
+import { AccountSelect, ACCOUNT_TO_PAYMENT_TYPE } from './AccountSelect';
 
 type Mode = 'subscription' | 'trial';
 
@@ -159,7 +159,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
           placeholder="Subscription name"
           maxLength={80}
           disabled={disabled}
-          className="flex-1 min-w-0 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+          className="flex-1 min-w-0 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400"
         />
       </div>
 
@@ -175,7 +175,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
               placeholder="0.00"
               min="0.01"
               step="0.01"
-              className="w-24 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+              className="w-24 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400"
             />
             <select
               value={currency}
@@ -216,7 +216,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="e.g. Streaming"
                 maxLength={40}
-                className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+                className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400"
               />
               <datalist id="sub-categories-add">
                 {CATEGORIES.map((c) => <option key={c} value={c} />)}
@@ -254,7 +254,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
                   placeholder="e.g. 399"
                   min="0"
                   step="0.01"
-                  className="w-full bg-ink-900 border border-emerald-500/30 rounded-md px-2 py-1.5 text-sm outline-none focus:border-emerald-500/60 placeholder:text-ink-700"
+                  className="w-full bg-ink-900 border border-emerald-500/30 rounded-md px-2 py-1.5 text-sm outline-none focus:border-emerald-500/60 placeholder:text-ink-400"
                 />
               </div>
             </div>
@@ -286,7 +286,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
                   onChange={(e) => setCategory(e.target.value)}
                   placeholder="Category (optional)"
                   maxLength={40}
-                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400"
                 />
                 <datalist id="sub-categories-trial">
                   {CATEGORIES.map((c) => <option key={c} value={c} />)}
@@ -301,8 +301,19 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
         </>
       )}
 
-      {/* Payment type + account (shared) */}
+      {/* Account + payment type (shared) */}
       <div className="flex items-center gap-2">
+        <AccountSelect
+          value={accountName}
+          onChange={setAccountName}
+          onAccountPicked={(acc) => {
+            if (acc) {
+              const pt = ACCOUNT_TO_PAYMENT_TYPE[acc.type];
+              if (pt) setPaymentType(pt);
+            }
+          }}
+          className="flex-1 bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 text-ink-200 placeholder:text-ink-400"
+        />
         <select
           value={paymentType}
           onChange={(e) => setPaymentType(e.target.value as PaymentType | '')}
@@ -313,19 +324,6 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <div className="flex-1">
-          <input
-            list="account-suggestions-add"
-            value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
-            placeholder="Account (e.g. HDFC)"
-            maxLength={60}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
-          />
-          <datalist id="account-suggestions-add">
-            {ACCOUNT_SUGGESTIONS.map((a) => <option key={a} value={a} />)}
-          </datalist>
-        </div>
       </div>
 
       {/* URL + notes (shared) */}
@@ -335,7 +333,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
           onChange={(e) => setUrl(e.target.value)}
           placeholder="URL (optional)"
           type="url"
-          className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+          className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400"
         />
         <textarea
           value={notes}
@@ -343,7 +341,7 @@ export function SubscriptionAddForm({ onCreate, onCancel, disabled }: Props) {
           placeholder="Notes (optional)"
           rows={2}
           maxLength={500}
-          className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600 resize-none"
+          className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1.5 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400 resize-none"
         />
       </div>
 

@@ -64,7 +64,7 @@ Do this on **each** machine you want to run the app on.
 
 ## Step 3 — Initialize the git repo (one-time)
 
-Open a terminal **in the `personal-os` folder** (the one containing `README.md`, `backend/`, `frontend/`):
+Open a terminal **in the `north-os` folder** (the one containing `README.md`, `backend/`, `frontend/`):
 
 **macOS/Linux:**
 ```bash
@@ -81,7 +81,7 @@ You should see "Week 1: project scaffold" as the first commit.
 
 > Optional: create a private repo on GitHub and push:
 > ```
-> git remote add origin git@github.com:<your-username>/personal-os.git
+> git remote add origin git@github.com:<your-username>/north-os.git
 > git push -u origin main
 > ```
 
@@ -89,7 +89,7 @@ You should see "Week 1: project scaffold" as the first commit.
 
 ## Step 4 — Configure your `.env`
 
-Still in the `personal-os` folder:
+Still in the `north-os` folder:
 
 **macOS/Linux:**
 ```bash
@@ -123,7 +123,7 @@ Leave everything else as-is for now.
 
 Make sure **LM Studio's server is running** (Step 2.4 — the green "Start Server" toggle).
 
-Still in the `personal-os` folder:
+Still in the `north-os` folder:
 
 **macOS/Linux:**
 ```bash
@@ -201,7 +201,7 @@ The frontend is running but the backend isn't. Look at the terminal output from 
 - **Backend** — Python FastAPI on `http://127.0.0.1:8000` (API docs at `/docs` if you're curious)
 - **Frontend** — Vite dev server on `http://127.0.0.1:5173` (what you open in the browser)
 - **LM Studio** — OpenAI-compatible server on `http://127.0.0.1:1234`
-- **SQLite** — file at `personal-os/data/personal-os.db` (encrypted with your passphrase)
+- **SQLite** — file at `north-os/data/north-os.db` (encrypted with your passphrase)
 
 To stop the app: `Ctrl+C` in the terminal where `start.sh` is running (Mac/Linux), or close the two console windows that `start.bat` opened (Windows). LM Studio stays up — that's fine; the "Start Server" toggle can stay on across runs.
 

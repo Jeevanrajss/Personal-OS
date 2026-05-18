@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, CreditCard, FileBarChart2, LayoutDashboard, Plus, TrendingDown, TrendingUp, Upload, Wallet, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CreditCard, Eye, EyeOff, FileBarChart2, LayoutDashboard, Plus, TrendingDown, TrendingUp, Upload, Wallet, X } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { AccountsCard } from '@/components/finance/AccountsCard';
 import { BudgetCard } from '@/components/finance/BudgetCard';
@@ -8,6 +8,7 @@ import { CategoryBreakdownCard } from '@/components/finance/CategoryBreakdownCar
 import { FinanceInsightsCard } from '@/components/finance/FinanceInsightsCard';
 import { ImportModal } from '@/components/finance/ImportModal';
 import { MonthlyReportView } from '@/components/finance/MonthlyReportView';
+import { SmsInbox } from '@/components/finance/SmsInbox';
 import { TransactionForm } from '@/components/finance/TransactionForm';
 import { TransactionList } from '@/components/finance/TransactionList';
 import { api, type Account, type FinanceMeta, type MonthlySummary, type Transaction, type TransactionIn } from '@/lib/api';
@@ -44,6 +45,7 @@ export function Finance() {
   const [month, setMonth] = useState(now.getMonth() + 1); // 1-based
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showValues, setShowValues] = useState(true);
   const [tab, setTab] = useState<Tab>('overview');
   const [cardTip, setCardTip] = useState<string | null>(null);
 
@@ -121,85 +123,124 @@ export function Finance() {
 
   return (
     <>
-      <PageHeader title="Finance" subtitle="Track income, expenses, and spending patterns." />
+      <PageHeader
+        title="Finance"
+        eyebrow={`FINANCE · ${MONTH_NAMES[month - 1].toUpperCase()} ${year}`}
+        subtitle="Income, expenses, budgets — one place. Locally tracked, privately analyzed."
+        action={
+          <div className="flex items-center gap-2">
+            {tab === 'overview' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowImport(true)}
+                  className="btn-ghost h-9 px-3.5 text-[13px]"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Import statement
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm((v) => !v)}
+                  className={cn(
+                    'inline-flex items-center gap-2 h-9 px-3.5 rounded-[10px] text-[13px] font-medium transition-all',
+                    showForm
+                      ? 'btn-ghost'
+                      : 'btn-primary',
+                  )}
+                >
+                  {showForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  {showForm ? 'Cancel' : 'Add transaction'}
+                </button>
+              </>
+            )}
+          </div>
+        }
+      />
 
-      {/* Month navigation + tabs */}
-      <div className="flex items-center gap-3 mb-4">
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-3 mb-0">
+        {/* Show/hide values toggle */}
         <button
           type="button"
-          onClick={prevMonth}
-          className="p-1.5 rounded-md border border-ink-800 bg-ink-900 text-ink-400 hover:text-ink-100 transition-colors"
+          onClick={() => setShowValues((v) => !v)}
+          className="p-1.5 rounded-lg transition-all"
+          style={{ border: '1px solid var(--border-subtle)', color: showValues ? 'var(--fg-4)' : 'var(--primary-300)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)'; (e.currentTarget as HTMLButtonElement).style.background = ''; }}
+          title={showValues ? 'Hide values' : 'Show values'}
         >
-          <ChevronLeft className="w-4 h-4" />
+          {showValues ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
-        <span className="text-sm font-semibold text-ink-100 w-36 text-center">
-          {MONTH_NAMES[month - 1]} {year}
-        </span>
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="p-1.5 rounded-md border border-ink-800 bg-ink-900 text-ink-400 hover:text-ink-100 transition-colors"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-        {!isCurrentMonth && (
+
+        {/* Month stepper */}
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={goToday}
-            className="px-2.5 py-1.5 rounded-md border border-ink-800 bg-ink-900 text-xs text-ink-400 hover:text-ink-100 transition-colors"
+            onClick={prevMonth}
+            className="p-1.5 rounded-lg text-ink-400 hover:text-ink-100 transition-all"
+            style={{ border: '1px solid var(--border-subtle)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)'; (e.currentTarget as HTMLButtonElement).style.background = ''; }}
           >
-            This month
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-        )}
-
-        {/* Tab switcher */}
-        <div className="ml-auto flex items-center gap-1 p-1 bg-ink-950 rounded-lg border border-ink-800">
-          {TABS.map((t) => (
+          <span className="text-sm font-semibold text-ink-100 w-36 text-center tabular-nums">
+            {MONTH_NAMES[month - 1]} {year}
+          </span>
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="p-1.5 rounded-lg text-ink-400 hover:text-ink-100 transition-all"
+            style={{ border: '1px solid var(--border-subtle)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)'; (e.currentTarget as HTMLButtonElement).style.background = ''; }}
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+          {!isCurrentMonth && (
             <button
-              key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
-                tab === t.id
-                  ? 'bg-ink-800 text-ink-100'
-                  : 'text-ink-500 hover:text-ink-300',
-              )}
+              onClick={goToday}
+              className="px-2.5 py-1 rounded-lg text-[11px] text-ink-400 hover:text-ink-100 transition-all"
+              style={{ border: '1px solid var(--border-subtle)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)'; (e.currentTarget as HTMLButtonElement).style.background = ''; }}
             >
-              {t.icon}
-              {t.label}
+              Today
             </button>
-          ))}
+          )}
         </div>
+      </div>
 
-        {/* Import button — overview only */}
-        {tab === 'overview' && (
+      {/* ── Underline Tab strip — matches HTML reference ── */}
+      <div
+        className="flex items-center gap-1.5 mb-6 mt-4"
+        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+      >
+        {TABS.map((t) => (
           <button
+            key={t.id}
             type="button"
-            onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-ink-700 bg-ink-900 text-ink-400 hover:text-ink-100 text-sm font-medium transition-colors"
-          >
-            <Upload className="w-4 h-4" />
-            Import
-          </button>
-        )}
-
-        {/* Add transaction button — overview only */}
-        {tab === 'overview' && (
-          <button
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => setTab(t.id)}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors',
-              showForm
-                ? 'border-ink-700 bg-ink-900 text-ink-400'
-                : 'border-accent/40 bg-accent/10 text-accent hover:bg-accent/20',
+              'relative inline-flex items-center gap-2 h-10 px-3.5 text-[13px] font-medium transition-all',
+              tab === t.id ? 'text-white' : 'text-ink-500 hover:text-white',
             )}
           >
-            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            {showForm ? 'Cancel' : 'Add Transaction'}
+            {t.icon}
+            {t.label}
+            {tab === t.id && (
+              <span
+                className="absolute left-0 right-0 bottom-[-1px] h-0.5 rounded-sm"
+                style={{
+                  background: 'var(--grad-primary)',
+                  boxShadow: '0 0 12px rgba(139,124,255,0.4)',
+                }}
+              />
+            )}
           </button>
-        )}
+        ))}
       </div>
 
       {/* Card tip banner */}
@@ -215,54 +256,69 @@ export function Finance() {
       {/* ── Overview tab ─────────────────────────────────────── */}
       {tab === 'overview' && (
         <>
-          {/* Stats chips */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          {/* KPI row — 4 cols matching HTML reference */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatChip
-              icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
-              label="Income"
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+              iconBg="rgba(61,255,152,0.10)"
+              label="Total Income"
               value={summary ? fmtMoney(summary.total_income, currency) : '—'}
-              color="text-emerald-400"
+              valueGradient="linear-gradient(135deg, #3DFF98, #B4F5CB)"
               sub={summary?.budget_overall
                 ? `${summary.budget_overall.pct.toFixed(0)}% of budget used`
                 : undefined}
+              showValues={showValues}
             />
             <StatChip
-              icon={<TrendingDown className="w-4 h-4 text-red-400" />}
-              label="Expenses"
+              icon={<TrendingDown className="w-3.5 h-3.5" />}
+              iconBg="rgba(255,91,110,0.10)"
+              label="Total Expenses"
               value={summary ? fmtMoney(summary.total_expense, currency) : '—'}
-              color="text-red-400"
+              valueGradient="linear-gradient(135deg, #FF7AD9, #FFB86B)"
+              showValues={showValues}
             />
             <StatChip
-              icon={<Wallet className="w-4 h-4 text-ink-400" />}
-              label="Net"
+              icon={<Wallet className="w-3.5 h-3.5" />}
+              iconBg="rgba(139,124,255,0.12)"
+              label="Net Balance"
               value={summary ? fmtMoney(summary.net, currency) : '—'}
-              color={netColor}
+              valueGradient={summary && summary.net >= 0
+                ? 'linear-gradient(135deg, #8B7CFF, #3EBEFF)'
+                : 'linear-gradient(135deg, #FF5B6E, #FFB86B)'}
               sub={summary?.budget_overall && summary.budget_overall.pct > 80
                 ? summary.budget_overall.pct > 100
                   ? '⚠ Over budget'
                   : `${(100 - summary.budget_overall.pct).toFixed(0)}% budget left`
                 : undefined}
+              showValues={showValues}
+            />
+            <StatChip
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+              iconBg="rgba(255,215,106,0.12)"
+              label="Savings Rate"
+              value={summary && summary.total_income > 0
+                ? `${Math.max(0, Math.round((summary.net / summary.total_income) * 100))}%`
+                : '—'}
+              valueGradient={undefined}
+              sub={summary?.budget_overall
+                ? summary.budget_overall.pct < 40 ? 'Goal 40% · crushing it' : `${(100 - summary.budget_overall.pct).toFixed(0)}% left`
+                : undefined}
+              savingsStyle
+              showValues={showValues}
             />
           </div>
 
-          {/* Main grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-10 gap-5">
-            {/* Left — charts + AI */}
-            <div className="lg:col-span-4 space-y-5">
-              <CategoryBreakdownCard
-                stats={summary?.by_category ?? []}
-                meta={meta ?? { expense_categories: [], income_categories: [], account_suggestions: [], credit_card_options: [], category_emoji: {} }}
-                currency={currency}
-                budgetByCategory={summary?.budget_by_category}
-              />
-              <FinanceInsightsCard />
-            </div>
+          {/* Main grid — 1.4fr left (transactions), 1fr right (categories + AI) */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-5">
+            {/* Left — add form + SMS inbox + transaction list */}
+            <div className="space-y-4">
+              <SmsInbox queryKey={txnKey} />
 
-            {/* Right — add form + transaction list */}
-            <div className="lg:col-span-6 space-y-4">
               {showForm && meta && (
-                <div className="card">
-                  <div className="card-title">New Transaction</div>
+                <div className="card" style={{ padding: 22 }}>
+                  <h3 style={{ margin: '0 0 16px', font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)' }}>
+                    New Transaction
+                  </h3>
                   <TransactionForm
                     meta={meta}
                     onSubmit={async (payload) => { await createMut.mutateAsync(payload); }}
@@ -271,11 +327,15 @@ export function Finance() {
                 </div>
               )}
 
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="card-title !mb-0">Transactions</div>
+              <div className="card" style={{ padding: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)' }}>
+                    {tab === 'overview' ? 'Recent Transactions' : 'All Transactions'}
+                  </h3>
                   {summary && summary.transaction_count > 0 && (
-                    <span className="text-[11px] text-ink-600">{summary.transaction_count} total</span>
+                    <span style={{ color: 'var(--fg-4)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                      {summary.transaction_count} total
+                    </span>
                   )}
                 </div>
                 {txnQ.isLoading ? (
@@ -290,6 +350,17 @@ export function Finance() {
                   />
                 )}
               </div>
+            </div>
+
+            {/* Right — categories + AI insights */}
+            <div className="space-y-5">
+              <CategoryBreakdownCard
+                stats={summary?.by_category ?? []}
+                meta={meta ?? { expense_categories: [], income_categories: [], account_suggestions: [], credit_card_options: [], category_emoji: {} }}
+                currency={currency}
+                budgetByCategory={summary?.budget_by_category}
+              />
+              <FinanceInsightsCard />
             </div>
           </div>
         </>
@@ -329,9 +400,10 @@ export function Finance() {
       )}
 
       {/* ── Import modal ──────────────────────────────────── */}
-      {showImport && (
+      {showImport && meta && (
         <ImportModal
           accounts={accountsQ.data ?? []}
+          meta={meta}
           onClose={() => setShowImport(false)}
           onImported={() => {
             qc.invalidateQueries({ queryKey: txnKey });
@@ -345,21 +417,78 @@ export function Finance() {
   );
 }
 
-function StatChip({ icon, label, value, color, sub }: {
+/** KPI card — matches HTML reference exactly */
+function StatChip({
+  icon, iconBg, label, value, valueGradient, sub, savingsStyle, showValues = true,
+}: {
   icon: React.ReactNode;
+  iconBg?: string;
   label: string;
   value: string;
-  color: string;
+  valueGradient?: string;
+  valueColor?: string;
   sub?: string;
+  savingsStyle?: boolean;
+  showValues?: boolean;
 }) {
+  const haloBg = savingsStyle ? 'var(--accent-yellow)'
+    : valueGradient?.includes('3DFF98') ? 'var(--accent-green)'
+    : valueGradient?.includes('FF7AD9') ? 'var(--accent-red)'
+    : 'var(--primary-500)';
+
+  const iconColor = savingsStyle ? 'var(--accent-yellow)'
+    : valueGradient?.includes('3DFF98') ? '#3DFF98'
+    : valueGradient?.includes('FF7AD9') ? '#FF5B6E'
+    : '#B8A5FF';
+
   return (
-    <div className="card flex items-center gap-3">
-      <span className="shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <div className="text-[10px] text-ink-500 uppercase tracking-wide">{label}</div>
-        <div className={cn('text-sm font-semibold tabular-nums truncate', color)}>{value}</div>
-        {sub && <div className="text-[10px] text-ink-600 truncate">{sub}</div>}
+    <div
+      className="relative overflow-hidden"
+      style={{ borderRadius: 18, padding: 22, background: 'var(--surface)', border: '1px solid var(--border-default)' }}
+    >
+      {/* Corner halo */}
+      <span
+        className="pointer-events-none absolute rounded-full"
+        style={{ right: -30, top: -30, width: 120, height: 120, background: haloBg, opacity: 0.10 }}
+      />
+      {/* Icon badge */}
+      {icon && (
+        <span
+          className="absolute flex items-center justify-center"
+          style={{ top: 18, right: 18, width: 32, height: 32, borderRadius: 10, background: iconBg, color: iconColor }}
+        >
+          {icon}
+        </span>
+      )}
+      {/* Label */}
+      <div style={{ font: '500 12px/1 var(--font-sans)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>
+        {label}
       </div>
+      {/* Value — use inline-block span so background-clip:text clips to text shape, not full block width */}
+      <div style={{ marginTop: 10, overflow: 'hidden' }}>
+        <span
+          className="tabular-nums"
+          style={{
+            display: 'inline-block',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            font: '500 36px/1.05 var(--font-display)',
+            letterSpacing: '-0.02em',
+            transition: 'filter 0.2s ease',
+            ...(showValues ? {} : { filter: 'blur(10px)', userSelect: 'none', pointerEvents: 'none' }),
+            ...(valueGradient
+              ? { background: valueGradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }
+              : { color: savingsStyle ? 'var(--fg-1)' : 'var(--fg-1)' }),
+          }}
+        >
+          {value}
+        </span>
+      </div>
+      {sub && (
+        <div style={{ color: 'var(--fg-4)', fontSize: 11.5, marginTop: 6 }}>{sub}</div>
+      )}
     </div>
   );
 }

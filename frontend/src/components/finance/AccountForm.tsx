@@ -205,13 +205,13 @@ export function AccountForm({ initial, onSubmit, onCancel }: Props) {
       <div className="space-y-3">
         <StepHeader title={type === 'upi' ? 'Select UPI / Wallet' : 'Select your bank'} step={2} total={3} />
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-600" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400" />
           <input
             autoFocus
             value={bankSearch}
             onChange={(e) => setBankSearch(e.target.value)}
             placeholder="Search…"
-            className="w-full pl-9 pr-3 py-2 bg-ink-900 border border-ink-800 rounded-md text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+            className="w-full pl-9 pr-3 py-2 bg-ink-900 border border-ink-800 rounded-md text-sm outline-none focus:border-accent/60 placeholder:text-ink-500"
           />
         </div>
         <div className="grid grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
@@ -231,7 +231,7 @@ export function AccountForm({ initial, onSubmit, onCancel }: Props) {
             </button>
           ))}
           {bankList.length === 0 && (
-            <p className="col-span-2 text-xs text-ink-600 text-center py-4">No matches.</p>
+            <p className="col-span-2 text-xs text-ink-400 text-center py-4">No matches.</p>
           )}
         </div>
         <NavButtons
@@ -365,7 +365,7 @@ export function AccountForm({ initial, onSubmit, onCancel }: Props) {
       {/* Nickname */}
       <div>
         <label className="block text-[11px] text-ink-500 uppercase tracking-wide mb-1">
-          Nickname <span className="text-ink-700 normal-case">(optional)</span>
+          Nickname <span className="text-ink-400 normal-case">(optional)</span>
         </label>
         <input
           value={nickname}
@@ -378,7 +378,7 @@ export function AccountForm({ initial, onSubmit, onCancel }: Props) {
               : 'e.g. Daily expenses card'
           }
           maxLength={100}
-          className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+          className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-500"
         />
       </div>
 
@@ -386,20 +386,20 @@ export function AccountForm({ initial, onSubmit, onCancel }: Props) {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-[11px] text-ink-500 uppercase tracking-wide mb-1">
-            Last 4 digits <span className="text-ink-700 normal-case">(optional)</span>
+            Last 4 digits <span className="text-ink-400 normal-case">(optional)</span>
           </label>
           <input
             value={last4}
             onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
             placeholder="4321"
             maxLength={4}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+            className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-500"
           />
         </div>
         {type === 'credit_card' && (
           <div>
             <label className="block text-[11px] text-ink-500 uppercase tracking-wide mb-1">
-              Credit limit <span className="text-ink-700 normal-case">(optional)</span>
+              Credit limit <span className="text-ink-400 normal-case">(optional)</span>
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-500">₹</span>

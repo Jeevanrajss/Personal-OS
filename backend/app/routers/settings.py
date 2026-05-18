@@ -8,6 +8,7 @@ from app.db import get_db
 from app.models.setting import Setting
 from app.schemas.setting import (
     PROVIDER_PRESETS,
+    LLMHealthResult,
     LLMTestResult,
     SettingsBulkUpdate,
 )
@@ -74,7 +75,7 @@ async def test_llm(db: Session = Depends(get_db)):
 
     try:
         response = await llm_client.generate(
-            "Reply with exactly: 'Personal OS connected.'",
+            "Reply with exactly: 'North OS connected.'",
             purpose="chat",
             temperature=0.0,
             max_tokens=32,
@@ -82,6 +83,17 @@ async def test_llm(db: Session = Depends(get_db)):
         return LLMTestResult(ok=True, provider=provider, model=model, response=response, error=None)
     except LLMError as e:
         return LLMTestResult(ok=False, provider=provider, model=model, response=None, error=str(e))
+
+
+# ---------------------------------------------------------------------------
+# GET /settings/health — fast reachability probe (5 s timeout)
+# ---------------------------------------------------------------------------
+@router.get("/health", response_model=LLMHealthResult)
+async def llm_health():
+    """Quick connectivity probe used by the Settings UI on load.
+    Returns in ≤5 s — much faster than test-llm which runs a full generation."""
+    result = await llm_client.quick_health()
+    return result
 
 
 # ---------------------------------------------------------------------------

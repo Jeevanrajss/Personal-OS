@@ -1,85 +1,69 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api, type Day, type HabitsTodayResponse, type SubscriptionStatsResponse } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useBriefing, type ErrorKind } from '@/contexts/BriefingContext';
+import { renderBold } from '@/lib/renderBold';
 
-const CACHE_KEY = 'dashboard.ai_briefing';
+// ── Actionable error banner ──────────────────────────────────────────────────
 
-function getCached(): { date: string; text: string } | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as { date: string; text: string };
-  } catch { return null; }
-}
+const ERROR_COPY: Record<NonNullable<ErrorKind>, { icon: string; title: string; hint: string }> = {
+  unreachable: {
+    icon: '📡',
+    title: 'AI server not reachable',
+    hint: 'Check that LM Studio / Ollama is running, or switch to a cloud provider in',
+  },
+  auth: {
+    icon: '🔑',
+    title: 'API key rejected',
+    hint: 'Your API key is invalid or expired. Update it in',
+  },
+  model: {
+    icon: '🤔',
+    title: 'Model not found',
+    hint: 'The configured model doesn\'t exist on this server. Pick a different one in',
+  },
+  server: {
+    icon: '⏳',
+    title: 'Server is busy',
+    hint: 'The LLM is still loading or overloaded. Try again in a moment, or check',
+  },
+  unknown: {
+    icon: '⚠️',
+    title: 'AI error',
+    hint: 'Something went wrong. Check your AI configuration in',
+  },
+};
 
-function setCache(date: string, text: string) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ date, text })); } catch { /* ignore */ }
-}
-
-const SYSTEM = `You are a concise, warm personal assistant giving someone their morning briefing.
-Read the provided data about their day — habits scheduled, journal status, upcoming subscriptions —
-and write a short, grounded 2–3 sentence briefing.
-Focus on what's actionable today. Be direct. No lists. End with one motivating thought.
-Never say "Based on the data" or similar meta-phrases.`;
-
-function composePrompt(
-  today: string,
-  habits: HabitsTodayResponse | undefined,
-  journal: Day | undefined,
-  subs: SubscriptionStatsResponse | undefined,
-): string {
-  const lines: string[] = [`Today is ${today}.`];
-
-  if (habits) {
-    const total = habits.habits.length;
-    const done = habits.habits.filter((h) => h.done).length;
-    const names = habits.habits.filter((h) => !h.done).map((h) => h.habit.name);
-    if (total === 0) {
-      lines.push('No habits scheduled today.');
-    } else {
-      lines.push(
-        `Habits: ${done}/${total} done today.` +
-        (names.length ? ` Still to do: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '…' : ''}.` : ' All complete!')
-      );
-    }
-  }
-
-  if (journal) {
-    const hasEntry = journal.entries.length > 0;
-    const hasMood = journal.mood_codes.length > 0;
-    lines.push(
-      hasEntry
-        ? `Journal: ${journal.entries.length} ${journal.entries.length === 1 ? 'entry' : 'entries'} written today${hasMood ? `, mood: ${journal.mood_codes.join(', ')}` : ''}.`
-        : 'Journal: no entry written yet today.'
-    );
-  }
-
-  if (subs) {
-    const due = subs.upcoming_30d.filter((u) => u.days_until <= 7);
-    if (due.length > 0) {
-      lines.push(
-        `Subscriptions: ${due.length} renewal${due.length > 1 ? 's' : ''} due this week — ${
-          due.slice(0, 2).map((u) => u.subscription.name).join(', ')
-        }${due.length > 2 ? '…' : ''}.`
-      );
-    }
-  }
-
-  lines.push('\nWrite the briefing now:');
-  return lines.join('\n');
+function BriefingError({ kind, message }: { kind: ErrorKind | null; message: string }) {
+  const copy = ERROR_COPY[kind ?? 'unknown'];
+  return (
+    <div style={{
+      marginTop: 8, padding: '10px 12px', borderRadius: 10,
+      background: 'rgba(255,100,80,0.07)', border: '1px solid rgba(255,100,80,0.18)',
+      display: 'flex', flexDirection: 'column', gap: 4,
+    }}>
+      <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-2)', fontWeight: 500 }}>
+        {copy.icon} {copy.title}
+      </p>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-4)', lineHeight: '18px' }}>
+        {copy.hint}{' '}
+        <Link
+          to="/app/settings"
+          style={{ color: 'var(--primary-300)', textDecoration: 'underline', textUnderlineOffset: 2 }}
+        >
+          Settings → AI Provider
+        </Link>
+        .
+      </p>
+    </div>
+  );
 }
 
 export function DashAIBriefing() {
   const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
-  const cached = useMemo(() => {
-    const c = getCached();
-    return c?.date === todayISO ? c.text : null;
-  }, [todayISO]);
-
-  const [briefing, setBriefing] = useState<string | null>(cached);
 
   const { data: habits } = useQuery<HabitsTodayResponse>({
     queryKey: ['habits-today', todayISO],
@@ -99,50 +83,55 @@ export function DashAIBriefing() {
     staleTime: 1000 * 60,
   });
 
-  const mut = useMutation({
-    mutationFn: async () => {
-      const prompt = composePrompt(todayISO, habits, journal, subs);
-      const res = await api.aiPing(prompt, {
-        purpose: 'chat',
-        system: SYSTEM,
-        temperature: 0.6,
-        max_tokens: 600,
-      });
-      return res.response.trim();
-    },
-    onSuccess: (text) => {
-      setBriefing(text);
-      setCache(todayISO, text);
-    },
-  });
+  const { text: briefing, isPending, error, errorKind, generate } = useBriefing();
 
-  const offline = mut.isError && (mut.error as Error).message.includes('503');
+  function handleGenerate() {
+    generate(habits, journal, subs);
+  }
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-accent" />
-          <div className="card-title !mb-0">Morning Briefing</div>
+    <div style={{
+      position: 'relative', borderRadius: 16, padding: '18px 20px',
+      background: `
+        radial-gradient(360px 200px at 90% 0%, rgba(139,124,255,0.20), transparent 60%),
+        linear-gradient(135deg, rgba(139,124,255,0.06), rgba(139,124,255,0.01)),
+        var(--surface)
+      `,
+      border: '1px solid rgba(139,124,255,0.24)',
+      overflow: 'hidden',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        {/* AI tag */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          color: 'var(--primary-300)',
+          font: '500 12px/1 var(--font-sans)',
+          letterSpacing: '0.12em', textTransform: 'uppercase',
+        }}>
+          <Sparkles style={{ width: 12, height: 12 }} />
+          Morning Briefing
         </div>
         <button
           type="button"
-          onClick={() => mut.mutate()}
-          disabled={mut.isPending}
+          onClick={handleGenerate}
+          disabled={isPending}
           title={briefing ? 'Regenerate briefing' : 'Generate briefing'}
           className={cn(
-            'p-1 rounded-md border border-transparent text-ink-500',
-            'hover:text-accent hover:border-ink-800 disabled:opacity-40 transition-colors',
+            'p-1 rounded-md border border-transparent',
+            'disabled:opacity-40 transition-colors',
           )}
+          style={{ color: 'var(--fg-4)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--primary-300)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
         >
-          {mut.isPending
+          {isPending
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
             : <RefreshCw className="w-3.5 h-3.5" />
           }
         </button>
       </div>
 
-      {mut.isPending && !briefing && (
+      {isPending && !briefing && (
         <div className="space-y-1.5 mt-1">
           {[90, 75, 60].map((w, i) => (
             <div key={i} className="h-3.5 bg-ink-900 rounded animate-pulse" style={{ width: `${w}%` }} />
@@ -150,32 +139,41 @@ export function DashAIBriefing() {
         </div>
       )}
 
-      {offline && (
-        <p className="text-xs text-amber-400 mt-1">
-          LM Studio is offline — start it to generate a briefing.
-        </p>
-      )}
-
-      {mut.isError && !offline && (
-        <p className="text-xs text-red-400 mt-1">{(mut.error as Error).message}</p>
-      )}
+      {error && <BriefingError kind={errorKind} message={error} />}
 
       {briefing ? (
-        <div className={cn('text-sm text-ink-300 leading-relaxed', mut.isPending && 'opacity-50')}>
-          {briefing}
+        <div style={{
+          fontSize: 13, color: 'var(--fg-3)', lineHeight: '20px',
+          opacity: isPending ? 0.5 : 1,
+        }}>
+          {renderBold(briefing)}
         </div>
-      ) : !mut.isPending && !mut.isError ? (
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-ink-500">
-            Click ↻ for an AI summary of your day.
+      ) : !isPending && !error ? (
+        <div>
+          <h3 style={{ margin: '14px 0 6px', font: '500 18px/1.2 var(--font-display)', letterSpacing: '-0.005em', color: 'var(--fg-1)' }}>
+            Here's what matters today.
+          </h3>
+          <p style={{ margin: '0 0 16px', color: 'var(--fg-3)', fontSize: 13, lineHeight: '20px' }}>
+            North AI scans your journal, habits, finance and calendar — then reflects back one short briefing for the day ahead. Runs locally via Ollama.
           </p>
-          <button
-            type="button"
-            onClick={() => mut.mutate()}
-            className="text-xs text-accent hover:underline shrink-0"
-          >
-            Generate
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              style={{
+                height: 36, padding: '0 14px', borderRadius: 10,
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                font: '500 13px/1 var(--font-sans)', color: 'white',
+                background: 'var(--grad-primary)',
+                boxShadow: 'var(--elev-1), var(--elev-glow)',
+                border: 'none', cursor: 'pointer', transition: 'var(--transition)',
+              }}
+            >
+              <Sparkles style={{ width: 14, height: 14 }} />
+              Generate briefing
+            </button>
+            <span style={{ color: 'var(--fg-4)', fontSize: 11.5 }}>~30 sec</span>
+          </div>
         </div>
       ) : null}
     </div>

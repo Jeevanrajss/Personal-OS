@@ -69,7 +69,7 @@ export function DashAIChat() {
           <button
             type="button"
             onClick={() => { setMessages([]); mut.reset(); }}
-            className="ml-auto text-[11px] text-ink-600 hover:text-ink-400 transition-colors"
+            className="ml-auto text-[11px] text-ink-400 hover:text-ink-400 transition-colors"
           >
             Clear
           </button>
@@ -115,7 +115,7 @@ export function DashAIChat() {
           <div className="flex justify-start">
             <div className="bg-ink-950 border border-ink-800 rounded-lg px-3 py-2.5 flex items-center gap-2">
               <Loader2 className="w-3 h-3 text-ink-500 animate-spin" />
-              <span className="text-xs text-ink-600">Thinking…</span>
+              <span className="text-xs text-ink-400">Thinking…</span>
             </div>
           </div>
         )}
@@ -139,7 +139,7 @@ export function DashAIChat() {
           onKeyDown={onKeyDown}
           placeholder="Ask about your habits, journal, spending…"
           rows={1}
-          className="flex-1 resize-none overflow-hidden bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 outline-none focus:border-accent/60 leading-relaxed"
+          className="flex-1 resize-none overflow-hidden bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm text-ink-100 placeholder:text-ink-500 outline-none focus:border-accent/60 leading-relaxed"
           style={{ minHeight: '38px' }}
         />
         <button

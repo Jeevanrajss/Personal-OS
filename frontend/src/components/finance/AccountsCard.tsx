@@ -125,16 +125,16 @@ export function AccountsCard() {
               )}>
                 {TYPE_LABEL[acct.type]}
               </span>
-              {acct.last4 && <span className="text-[11px] text-ink-600">••••{acct.last4}</span>}
+              {acct.last4 && <span className="text-[11px] text-ink-400">••••{acct.last4}</span>}
               {acct.credit_limit && (
-                <span className="text-[11px] text-ink-600">
+                <span className="text-[11px] text-ink-400">
                   Limit: ₹{acct.credit_limit.toLocaleString('en-IN')}
                 </span>
               )}
               {b.annual_fee !== null && acct.type === 'credit_card' && (
                 <span className={cn(
                   'text-[10px] px-1.5 py-0.5 rounded',
-                  b.annual_fee === 0 ? 'text-emerald-500 bg-emerald-500/10' : 'text-ink-600 bg-ink-800',
+                  b.annual_fee === 0 ? 'text-emerald-500 bg-emerald-500/10' : 'text-ink-400 bg-ink-800',
                 )}>
                   {b.annual_fee === 0 ? 'Free' : `₹${b.annual_fee}/yr`}
                 </span>
@@ -150,14 +150,14 @@ export function AccountsCard() {
             <button
               type="button"
               onClick={() => setEditing(acct)}
-              className="p-1.5 rounded text-ink-600 hover:text-ink-300 hover:bg-ink-800 transition-colors"
+              className="p-1.5 rounded text-ink-400 hover:text-ink-300 hover:bg-ink-800 transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={() => { if (confirm(`Remove "${displayName}"?`)) deleteMut.mutate(acct.id); }}
-              className="p-1.5 rounded text-ink-600 hover:text-red-400 hover:bg-ink-800 transition-colors"
+              className="p-1.5 rounded text-ink-400 hover:text-red-400 hover:bg-ink-800 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -176,7 +176,7 @@ export function AccountsCard() {
             )}
             {Object.keys(b.cashback).length > 0 && (
               <div>
-                <p className="text-[10px] text-ink-600 uppercase tracking-wide mb-1.5">Cashback by category</p>
+                <p className="text-[10px] text-ink-400 uppercase tracking-wide mb-1.5">Cashback by category</p>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(b.cashback).map(([cat, pct]) => (
                     <span key={cat} className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full px-2 py-0.5">
@@ -188,7 +188,7 @@ export function AccountsCard() {
             )}
             {b.perks.length > 0 && (
               <div>
-                <p className="text-[10px] text-ink-600 uppercase tracking-wide mb-1.5">Perks</p>
+                <p className="text-[10px] text-ink-400 uppercase tracking-wide mb-1.5">Perks</p>
                 <ul className="space-y-1">
                   {b.perks.map((p, i) => (
                     <li key={i} className="flex items-start gap-1.5 text-xs text-ink-400">
@@ -200,7 +200,7 @@ export function AccountsCard() {
               </div>
             )}
             {b.perks.length === 0 && Object.keys(b.cashback).length === 0 && (
-              <p className="text-xs text-ink-600">No benefits saved. Edit the account to add them.</p>
+              <p className="text-xs text-ink-400">No benefits saved. Edit the account to add them.</p>
             )}
           </div>
         )}
@@ -252,7 +252,7 @@ export function AccountsCard() {
         <div>
           <h3 className="text-[11px] text-ink-500 uppercase tracking-wide mb-2">
             Credit Cards
-            <span className="ml-1.5 text-ink-700 normal-case">(tap to view benefits)</span>
+            <span className="ml-1.5 text-ink-400 normal-case">(tap to view benefits)</span>
           </h3>
           <div className="space-y-2">
             {creditCards.map((a) => <AccountRow key={a.id} acct={a} />)}
@@ -271,7 +271,7 @@ export function AccountsCard() {
       )}
 
       {accounts.length === 0 && !accountsQ.isLoading && !showForm && (
-        <div className="py-10 text-center text-sm text-ink-600 border border-dashed border-ink-800 rounded-xl">
+        <div className="py-10 text-center text-sm text-ink-400 border border-dashed border-ink-800 rounded-xl">
           No accounts yet. Add your first one above.
         </div>
       )}

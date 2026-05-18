@@ -21,7 +21,7 @@ def generate_csv(report: dict[str, Any]) -> bytes:
     label = f"{month_name[month]} {year}"
 
     # Header
-    w.writerow([f"Personal OS — Financial Report — {label}"])
+    w.writerow([f"North OS — Financial Report — {label}"])
     w.writerow([])
 
     # Summary
@@ -95,7 +95,7 @@ def generate_pdf(report: dict[str, Any]) -> bytes:
     class PDF(FPDF):
         def header(self):
             self.set_font("Helvetica", "B", 11)
-            self.cell(0, 8, "Personal OS — Financial Report", align="L")
+            self.cell(0, 8, "North OS — Financial Report", align="L")
             self.set_font("Helvetica", "", 9)
             self.cell(0, 8, f"Generated {today}", align="R", new_x="LMARGIN", new_y="NEXT")
             self.set_draw_color(200, 200, 200)

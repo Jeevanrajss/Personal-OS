@@ -77,12 +77,12 @@ export function SuggestedTags({ date, existingTags, onAccept }: Props) {
           )}
           {suggestions === null ? 'Suggest tags' : 'Suggest again'}
         </button>
-        {model && <span className="text-[11px] text-ink-600 font-mono">{model}</span>}
+        {model && <span className="text-[11px] text-ink-400 font-mono">{model}</span>}
         {raw && (
           <button
             type="button"
             onClick={() => setShowRaw((v) => !v)}
-            className="text-[11px] text-ink-600 hover:text-ink-400 underline"
+            className="text-[11px] text-ink-400 hover:text-ink-400 underline"
           >
             {showRaw ? 'hide raw' : 'show raw'}
           </button>
@@ -94,7 +94,7 @@ export function SuggestedTags({ date, existingTags, onAccept }: Props) {
       {reasonMsg && <div className="mt-2 text-xs text-amber-400/80">{reasonMsg}</div>}
 
       {suggestions && suggestions.length === 0 && !loading && reason === 'ok' && (
-        <div className="mt-2 text-xs text-ink-600">No new suggestions.</div>
+        <div className="mt-2 text-xs text-ink-400">No new suggestions.</div>
       )}
 
       {suggestions && suggestions.length > 0 && (

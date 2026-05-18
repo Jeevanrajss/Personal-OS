@@ -2,32 +2,293 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    color-scheme: dark;
-  }
-  html, body, #root { height: 100%; }
-  body {
-    @apply bg-ink-950 text-ink-100 antialiased;
-    font-feature-settings: "ss01", "cv11";
-  }
-  ::selection {
-    @apply bg-accent-muted text-ink-50;
+/* ── Clash Grotesk display font ──────────────────────────────────────────── */
+@font-face {
+  font-family: "Clash Grotesk";
+  src: url("/fonts/ClashGrotesk-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Clash Grotesk";
+  src: url("/fonts/ClashGrotesk-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Clash Grotesk";
+  src: url("/fonts/ClashGrotesk-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* ── Design token shims (values not scanned by JIT) ──────────────────────── */
+@layer utilities {
+  /* ink-500 / ink-700 shims */
+  .bg-ink-700    { background-color: #232734; }
+  .border-ink-700 { border-color: #232734; }
+  .text-ink-500  { color: #5A6275; }
+  .text-ink-700  { color: #232734; }
+  .text-ink-300  { color: #A0A9BC; }
+  /* Aurora ambient layer — sits behind app content */
+  .aurora-bg::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(700px 480px at 78% -8%, rgba(139,124,255,0.18), transparent 60%),
+      radial-gradient(560px 380px at -6% 108%, rgba(62,190,255,0.10), transparent 65%);
+    z-index: 0;
   }
 }
 
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* North OS design tokens */
+    --bg-app:        #0E1018;
+    --bg-sidebar:    #080910;
+    --surface:       #151827;
+    --surface-elev:  #1C2030;
+    --surface-hover: #232734;
+    --border-default: rgba(255,255,255,0.08);
+    --border-subtle:  rgba(255,255,255,0.04);
+    --border-strong:  rgba(255,255,255,0.16);
+    --primary-500: #8B7CFF;
+    --primary-400: #9D8DFF;
+    --primary-300: #B8A5FF;
+    --secondary-500: #3EBEFF;
+    --accent-pink:   #FF7AD9;
+    --accent-orange: #FFB86B;
+    --accent-green:  #3DFF98;
+    --accent-red:    #FF5B6E;
+    --accent-yellow: #FFD76A;
+    --fg-1: #FFFFFF;
+    --fg-2: #C9D0E0;
+    --fg-3: #A0A9BC;
+    --fg-4: #7B8498;
+    --fg-disabled: #5A6275;
+    --fg-accent: #B8A5FF;
+    --glass-bg:     rgba(255,255,255,0.03);
+    --glass-border: rgba(255,255,255,0.06);
+    --glass-blur:   blur(20px);
+    --grad-primary: linear-gradient(135deg, #8B7CFF 0%, #6352DB 100%);
+    --grad-aurora:  linear-gradient(135deg, #8B7CFF 0%, #3EBEFF 50%, #FF7AD9 100%);
+    --elev-1: 0 1px 2px rgba(0,0,0,0.12);
+    --elev-2: 0 4px 12px rgba(0,0,0,0.18);
+    --elev-3: 0 12px 30px rgba(0,0,0,0.24);
+    --elev-glow: 0 0 40px rgba(139,124,255,0.15);
+    --elev-glow-strong: 0 0 60px rgba(139,124,255,0.32);
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --dur:  250ms;
+    --dur-fast: 120ms;
+    --transition: all var(--dur) var(--ease);
+    --font-display: "Clash Grotesk", "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+  }
+
+  html, body, #root { height: 100%; }
+
+  body {
+    @apply text-ink-200 antialiased;
+    background-color: #0E1018;
+    font-family: 'Inter var', Inter, system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 24px;
+  }
+
+  /* Aurora ambient gradient overlay — matching HTML reference */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(700px 480px at 78% -8%, rgba(139,124,255,0.18), transparent 60%),
+      radial-gradient(560px 380px at -6% 108%, rgba(62,190,255,0.10), transparent 65%);
+    z-index: 0;
+  }
+
+  #root { position: relative; z-index: 1; }
+
+  ::selection { background: rgba(139,124,255,0.30); color: white; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3A4050; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #5A6275; }
+}
+
 @layer components {
+
+  /* ── Cards ──────────────────────────────────────────────────────────────── */
   .card {
-    @apply bg-ink-900 border border-ink-800 rounded-card p-5;
+    background: var(--surface);
+    border: 1px solid var(--border-default);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
   }
+
+  .card-xl {
+    background: var(--surface);
+    border: 1px solid var(--border-default);
+    border-radius: 20px;
+    padding: 28px 32px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-glow {
+    border-radius: 20px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(360px 240px at 80% 0%, rgba(139,124,255,0.22), transparent 60%),
+      radial-gradient(280px 200px at 10% 100%, rgba(62,190,255,0.16), transparent 60%),
+      linear-gradient(135deg, rgba(139,124,255,0.08), rgba(139,124,255,0.02)),
+      var(--surface);
+    border: 1px solid rgba(139,124,255,0.28);
+    box-shadow: 0 0 40px rgba(139,124,255,0.15);
+  }
+
   .card-title {
-    @apply text-sm font-medium text-ink-400 uppercase tracking-wider mb-3;
+    @apply text-[10.5px] font-medium uppercase tracking-[0.12em] mb-3.5;
+    color: var(--fg-4, #7B8498);
+    display: flex; align-items: center; justify-content: space-between;
   }
+
+  /* ── Nav ─────────────────────────────────────────────────────────────────── */
   .nav-link {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm text-ink-400
-           hover:text-ink-100 hover:bg-ink-900 transition-colors;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium transition-all duration-[250ms];
+    color: #A0A9BC;
   }
+  .nav-link:hover {
+    background: var(--surface-hover);
+    color: white;
+  }
+
+  /* Active: flat surface bg + left accent bar (matches HTML .nav-item.active::before) */
   .nav-link-active {
-    @apply text-ink-50 bg-ink-900;
+    background: var(--surface);
+    color: white;
+    position: relative;
   }
+  .nav-link-active::before {
+    content: "";
+    position: absolute;
+    left: -8px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 16px; border-radius: 2px;
+    background: var(--primary-500);
+    box-shadow: 0 0 8px rgba(139,124,255,0.6);
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium text-white transition-all duration-[250ms] cursor-pointer;
+    background: var(--grad-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 0 40px rgba(139,124,255,0.15);
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18), 0 0 60px rgba(139,124,255,0.32);
+  }
+  .btn-primary:disabled { @apply opacity-40 cursor-not-allowed; transform: none; }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 h-9 px-3.5 rounded-[10px] text-sm font-medium transition-all duration-[250ms] cursor-pointer;
+    color: #C9D0E0;
+    border: 1px solid var(--border-default);
+    background: rgba(255,255,255,0.03);
+  }
+  .btn-ghost:hover { border-color: var(--border-strong); color: white; }
+  .btn-ghost:disabled { @apply opacity-40 cursor-not-allowed; }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium transition-all duration-[250ms] cursor-pointer;
+    color: #C9D0E0;
+    background: var(--surface-elev);
+    border: 1px solid var(--border-default);
+  }
+  .btn-secondary:hover { background: var(--surface-hover); color: white; }
+
+  /* ── Inputs ──────────────────────────────────────────────────────────────── */
+  .input {
+    @apply w-full rounded-xl px-3 py-2 text-sm outline-none transition-all;
+    background: rgba(0,0,0,0.30);
+    border: 1px solid var(--border-default);
+    color: white;
+  }
+  .input::placeholder { color: #7B8498; }
+  .input:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(139,124,255,0.16);
+  }
+
+  .input-label {
+    @apply block text-xs font-medium mb-1;
+    color: #7B8498;
+  }
+
+  /* ── Stat / KPI ──────────────────────────────────────────────────────────── */
+  .stat-number {
+    font: 500 36px/1 "Clash Grotesk", Inter, sans-serif;
+    letter-spacing: -0.02em;
+    color: white;
+  }
+  .stat-label {
+    font: 500 11px/1 Inter, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7B8498;
+  }
+
+  /* ── Gradient text ───────────────────────────────────────────────────────── */
+  .gradient-text {
+    background: linear-gradient(135deg, #B8A5FF 0%, #8B7CFF 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Badge ───────────────────────────────────────────────────────────────── */
+  .badge { @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold; }
+
+  .badge-success {
+    @apply badge;
+    color: #3DFF98;
+    background: rgba(61,255,152,0.12);
+    border: 1px solid rgba(61,255,152,0.25);
+  }
+  .badge-warning {
+    @apply badge;
+    color: #FFB84D;
+    background: rgba(255,184,77,0.12);
+    border: 1px solid rgba(255,184,77,0.25);
+  }
+  .badge-danger {
+    @apply badge;
+    color: #FF5B6E;
+    background: rgba(255,91,110,0.12);
+    border: 1px solid rgba(255,91,110,0.25);
+  }
+
+  /* ── Progress bar ─────────────────────────────────────────────────────────── */
+  .progress-bar {
+    @apply h-1.5 rounded-full overflow-hidden;
+    background: var(--surface-hover);
+  }
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500;
+    background: var(--grad-primary);
+  }
+}
+
+b, strong {
+  color: white;
 }

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, TrendingUp, Zap, Calendar, PauseCircle } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { api, type Subscription } from '@/lib/api';
 import { CURRENCY_OPTS, daysUntil, formatAmount } from './subUtils';
 
@@ -107,21 +107,32 @@ export function SubscriptionStatsCard({ displayCurrency, onCurrencyChange }: Pro
   }, [activeSubs, pausedSubs, rates, displayCurrency]);
 
   return (
-    <div className="card">
+    <div className="card" style={{ padding: 22 }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="card-title mb-0">Overview</div>
-        <div className="flex items-center gap-1.5">
-          {ratesFetching && <RefreshCw className="w-3 h-3 text-ink-500 animate-spin" />}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h3 style={{ margin: 0, font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)' }}>
+          Overview
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {ratesFetching && <RefreshCw style={{ width: 11, height: 11, color: 'var(--fg-4)' }} className="animate-spin" />}
           {ratesError && (
-            <span className="text-[10px] text-red-400" title="Could not fetch exchange rates">
+            <span style={{ fontSize: 10, color: 'var(--accent-red)' }} title="Could not fetch exchange rates">
               rates offline
             </span>
           )}
           <select
             value={displayCurrency}
             onChange={(e) => onCurrencyChange(e.target.value)}
-            className="bg-ink-900 border border-ink-800 rounded-md px-1.5 py-0.5 text-xs text-ink-300 outline-none focus:border-accent/60"
+            style={{
+              background: 'var(--surface-elev)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 6,
+              padding: '3px 8px',
+              fontSize: 11.5,
+              color: 'var(--fg-3)',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
           >
             {CURRENCY_OPTS.map((o) => (
               <option key={o.value} value={o.value}>{o.value}</option>
@@ -130,58 +141,60 @@ export function SubscriptionStatsCard({ displayCurrency, onCurrencyChange }: Pro
         </div>
       </div>
 
-      {/* 2×2 stat grid */}
-      <div className="grid grid-cols-2 gap-2">
-        <Stat label="Active" value={String(activeSubs.length)} />
-        <Stat label="Per Day" value={fmtStat(perDay, displayCurrency)} approx={approx} />
-        <Stat label="Monthly" value={fmtStat(monthly, displayCurrency)} approx={approx} />
-        <Stat label="Yearly" value={fmtStat(yearly, displayCurrency)} approx={approx} />
+      {/* 2×2 stat tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+        <StatTile label="Active" value={String(activeSubs.length)} />
+        <StatTile label="Per Day" value={fmtStat(perDay, displayCurrency)} approx={approx} />
+        <StatTile label="Monthly" value={fmtStat(monthly, displayCurrency)} approx={approx} />
+        <StatTile label="Yearly" value={fmtStat(yearly, displayCurrency)} approx={approx} />
       </div>
 
       {approx && (
-        <p className="mt-1.5 text-[10px] text-ink-600 text-center">
+        <p style={{ margin: '0 0 12px', fontSize: 10, color: 'var(--fg-4)', textAlign: 'center' }}>
           ~ some currencies excluded (rates unavailable)
         </p>
       )}
 
-      {/* Insights */}
+      {/* Insights section */}
       {activeSubs.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-ink-800 space-y-1.5">
-          <div className="text-[10px] font-medium text-ink-500 uppercase tracking-wide mb-2">Insights</div>
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ font: '500 12px/1 var(--font-sans)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-4)', marginBottom: 4 }}>
+            Insights
+          </div>
 
           {biggestSub && (
-            <InsightRow icon={<TrendingUp className="w-3 h-3 text-accent/70" />}>
-              <span className="text-ink-400">Biggest:</span>{' '}
-              <span className="text-ink-200">{biggestSub.name}</span>{' '}
-              <span className="text-ink-400 tabular-nums">
+            <InsightRow dot="var(--primary-300)">
+              <span style={{ color: 'var(--fg-4)' }}>Biggest:</span>{' '}
+              <span style={{ color: 'var(--fg-2)' }}>{biggestSub.name}</span>{' '}
+              <span style={{ color: 'var(--fg-4)', fontFamily: 'var(--font-mono)' }}>
                 {fmtStat(toDisplay(biggestSub), displayCurrency)}/mo
               </span>
             </InsightRow>
           )}
 
           {dueThisWeek > 0 && (
-            <InsightRow icon={<Calendar className="w-3 h-3 text-amber-400/70" />}>
-              <span className="text-amber-400 font-medium">{dueThisWeek}</span>{' '}
-              <span className="text-ink-400">
+            <InsightRow dot="var(--accent-yellow)">
+              <span style={{ color: 'var(--accent-yellow)', fontWeight: 500 }}>{dueThisWeek}</span>{' '}
+              <span style={{ color: 'var(--fg-4)' }}>
                 {dueThisWeek === 1 ? 'subscription' : 'subscriptions'} due this week
               </span>
             </InsightRow>
           )}
 
           {pausedSubs.length > 0 && (
-            <InsightRow icon={<PauseCircle className="w-3 h-3 text-amber-500/70" />}>
-              <span className="text-ink-400">Paused:</span>{' '}
-              <span className="text-ink-200">{pausedSubs.length}</span>{' '}
-              <span className="text-ink-500">
+            <InsightRow dot="var(--fg-disabled)">
+              <span style={{ color: 'var(--fg-4)' }}>Paused:</span>{' '}
+              <span style={{ color: 'var(--fg-2)' }}>{pausedSubs.length}</span>{' '}
+              <span style={{ color: 'var(--fg-4)' }}>
                 ({fmtStat(pausedMonthly, displayCurrency)}/mo frozen)
               </span>
             </InsightRow>
           )}
 
           {activeSubs.length >= 2 && (
-            <InsightRow icon={<Zap className="w-3 h-3 text-ink-500" />}>
-              <span className="text-ink-400">Avg per sub:</span>{' '}
-              <span className="text-ink-200 tabular-nums">
+            <InsightRow dot="var(--border-strong)">
+              <span style={{ color: 'var(--fg-4)' }}>Avg per sub:</span>{' '}
+              <span style={{ color: 'var(--fg-2)', fontFamily: 'var(--font-mono)' }}>
                 {fmtStat(monthly / activeSubs.length, displayCurrency)}/mo
               </span>
             </InsightRow>
@@ -192,24 +205,30 @@ export function SubscriptionStatsCard({ displayCurrency, onCurrencyChange }: Pro
   );
 }
 
-function Stat({ label, value, approx }: { label: string; value: string; approx?: boolean }) {
+function StatTile({ label, value, approx }: { label: string; value: string; approx?: boolean }) {
   return (
-    <div className="rounded-md bg-ink-950 border border-ink-800 px-2 py-2 text-center min-w-0">
-      <div className="text-[10px] text-ink-500 uppercase tracking-wide mb-1">{label}</div>
-      <div
-        className="text-sm font-semibold text-ink-100 tabular-nums truncate"
-        title={value}
-      >
+    <div style={{
+      background: 'var(--surface-elev)',
+      border: '1px solid var(--border-default)',
+      borderRadius: 10,
+      padding: '10px 12px',
+      textAlign: 'center',
+      minWidth: 0,
+    }}>
+      <div style={{ font: '500 12px/1 var(--font-sans)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-4)', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ font: '500 14px/1 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {approx ? '~' : ''}{value}
       </div>
     </div>
   );
 }
 
-function InsightRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function InsightRow({ dot, children }: { dot: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5 text-[11px]">
-      <span className="shrink-0">{icon}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+      <i style={{ width: 6, height: 6, borderRadius: 999, background: dot, flexShrink: 0, display: 'inline-block' }} />
       <span>{children}</span>
     </div>
   );

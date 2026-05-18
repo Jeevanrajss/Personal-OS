@@ -10,7 +10,8 @@ import re
 
 from app.schemas.finance import EXPENSE_CATEGORIES, INCOME_CATEGORIES
 
-ALL_CATEGORIES = EXPENSE_CATEGORIES + INCOME_CATEGORIES
+# Deduplicate while preserving order (some categories appear in both lists, e.g. "Splits")
+ALL_CATEGORIES = list(dict.fromkeys(EXPENSE_CATEGORIES + INCOME_CATEGORIES))
 
 # Heuristic keyword map as fast pre-filter (reduces LLM calls for obvious cases)
 _KEYWORD_MAP: list[tuple[list[str], str]] = [

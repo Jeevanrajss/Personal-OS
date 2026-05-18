@@ -1,31 +1,94 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, Eye, EyeOff, Loader2, RefreshCw, Wifi } from 'lucide-react';
+import {
+  getLockHash, setLockHash, clearLockHash, hashLock,
+  getBiometricCredId, setBiometricCredId, clearBiometricCredId,
+  isBiometricAvailable, registerBiometric,
+} from '@/components/LockScreen';
 import { PageHeader } from '@/components/PageHeader';
-import { api, ProviderPreset, LLMTestResult } from '@/lib/api';
+import { api, type LLMHealthResult, ProviderPreset, LLMTestResult, type FinanceCategoryOut, type FinanceCategoryIn, type FinanceCategoryType } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { CURRENCY_OPTS } from '@/components/subscriptions/subUtils';
+import { MODULE_CONFIGS } from '@/lib/modules';
+import { useModules } from '@/contexts/ModulesContext';
+
+// ── Connection status pill ───────────────────────────────────────────────────
+
+function ConnectionStatusPill({ result, isLoading }: { result?: LLMHealthResult; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--fg-4)' }}>
+        <Loader2 style={{ width: 11, height: 11 }} className="animate-spin" /> Checking…
+      </span>
+    );
+  }
+  if (!result) return null;
+
+  // ok === null means "not applicable" (e.g. Anthropic)
+  if (result.ok === null) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--fg-4)' }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--fg-disabled)', display: 'inline-block' }} />
+        Use "Test connection" to verify
+      </span>
+    );
+  }
+  if (result.ok) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--accent-green)' }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-green)', boxShadow: '0 0 6px var(--accent-green)', display: 'inline-block' }} />
+        Connected · {result.models.length} model{result.models.length !== 1 ? 's' : ''} loaded
+      </span>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#f87171' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f87171', display: 'inline-block' }} />
+      Not reachable
+    </span>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Shared input / button styles (match the rest of the app)
 // ---------------------------------------------------------------------------
 const inputCls =
-  'w-full bg-ink-900 border border-ink-800 rounded-md px-2.5 py-1.5 text-sm text-ink-200 outline-none focus:border-accent/60 placeholder:text-ink-600 disabled:opacity-50';
+  'w-full rounded-lg px-3 py-2 text-sm text-ink-200 outline-none placeholder:text-ink-500 disabled:opacity-50 transition-colors'
+  + ' bg-[var(--surface-elev)] border border-[rgba(255,255,255,0.07)] focus:border-[rgba(139,124,255,0.50)]';
 
 const selectCls =
-  'w-full bg-ink-900 border border-ink-800 rounded-md px-2.5 py-1.5 text-sm text-ink-200 outline-none focus:border-accent/60';
+  'w-full rounded-lg px-3 py-2 text-sm text-ink-200 outline-none transition-colors'
+  + ' bg-[var(--surface-elev)] border border-[rgba(255,255,255,0.07)] focus:border-[rgba(139,124,255,0.50)]';
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[10px] text-ink-500 uppercase tracking-wide mb-0.5">
+    <label className="block text-[12px] text-ink-500 uppercase tracking-wide mb-0.5">
       {children}
     </label>
   );
 }
 
+function SectionHead({ title, desc }: { title: string; desc?: string }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <h2 style={{ margin: 0, font: '500 26px/1.15 var(--font-display)', letterSpacing: '-0.02em', color: 'var(--fg-1)' }}>
+        {title}
+      </h2>
+      {desc && <p style={{ margin: '6px 0 0', color: 'var(--fg-4)', fontSize: 13 }}>{desc}</p>}
+    </div>
+  );
+}
+
+/** Deprecated: kept for backward compat */
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-sm font-medium text-ink-300 mb-4">{children}</h2>
+    <div className="flex items-baseline gap-3 mb-5">
+      <h2 className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-ink-500 shrink-0">
+        {children}
+      </h2>
+      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
+    </div>
   );
 }
 
@@ -37,7 +100,7 @@ function BtnPrimary({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="px-3 py-1.5 rounded-md bg-accent/20 border border-accent/40 text-xs text-accent hover:bg-accent/30 disabled:opacity-40 transition-colors"
+      className="px-4 py-2 rounded-lg text-xs font-medium text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 active:scale-[0.97] active:opacity-80 disabled:opacity-40 disabled:pointer-events-none transition-colors"
     >
       {children}
     </button>
@@ -52,10 +115,102 @@ function BtnSecondary({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="px-3 py-1.5 rounded-md bg-ink-900 border border-ink-800 text-xs text-ink-400 hover:text-ink-200 hover:border-ink-700 disabled:opacity-40 transition-colors"
+      className="px-4 py-2 rounded-lg text-xs font-medium text-ink-400 hover:text-ink-200 border border-[rgba(255,255,255,0.08)] hover:bg-white/5 active:scale-[0.97] active:opacity-80 disabled:opacity-40 disabled:pointer-events-none transition-colors"
     >
       {children}
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Timezone picker
+// ---------------------------------------------------------------------------
+const ALL_TIMEZONES: string[] =
+  typeof (Intl as any).supportedValuesOf === 'function'
+    ? (Intl as any).supportedValuesOf('timeZone')
+    : [
+        'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Asia/Tokyo',
+        'Asia/Shanghai', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+        'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+        'America/Sao_Paulo', 'Australia/Sydney', 'Pacific/Auckland',
+      ];
+
+function tzOffsetLabel(tz: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone: tz, timeZoneName: 'shortOffset',
+    }).formatToParts(new Date());
+    return parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function TimezoneField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q
+      ? ALL_TIMEZONES.filter((tz) => tz.toLowerCase().includes(q))
+      : ALL_TIMEZONES;
+    return list.slice(0, 60);
+  }, [query]);
+
+  // Display: when closed show "Region/City (UTC±X)", when open show search query
+  const displayValue = open ? query : value ? `${value}  ${tzOffsetLabel(value)}`.trim() : '';
+
+  return (
+    <div ref={ref}>
+      <Label>Timezone</Label>
+      <div className="relative">
+        <input
+          className={inputCls}
+          value={displayValue}
+          placeholder="Search timezone…"
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(''); setOpen(true); }}
+        />
+        {open && (
+          <ul className="absolute z-20 mt-1 w-full bg-ink-900 border border-ink-700 rounded-md shadow-xl max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-xs text-ink-400">No matches</li>
+            ) : (
+              filtered.map((tz) => (
+                <li key={tz}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-xs transition-colors',
+                      tz === value
+                        ? 'text-accent bg-accent/10'
+                        : 'text-ink-300 hover:bg-ink-800 hover:text-ink-100',
+                    )}
+                    onClick={() => { onChange(tz); setOpen(false); setQuery(''); }}
+                  >
+                    <span className="font-medium">{tz}</span>
+                    <span className="ml-1.5 text-ink-500">{tzOffsetLabel(tz)}</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+      </div>
+      <p className="text-[10px] text-ink-400 mt-0.5">
+        Used for date display and time-aware greetings.
+      </p>
+    </div>
   );
 }
 
@@ -129,8 +284,1357 @@ function ModelField({
 }
 
 // ---------------------------------------------------------------------------
+// Finance Categories panel
+// ---------------------------------------------------------------------------
+const EMOJI_SUGGESTIONS = ['💸','🍽️','🚗','🛒','🏥','🎬','🏠','💡','📚','💪','✈️','💳','🤝','💼','💰','📈','🎁','💵','🎮','🎵','📱','🏋️','🌮','☕','🎨','🏪','🧴','🐾','💊','🚀','🎓','🏦'];
+
+function FinanceCategoriesPanel() {
+  const qc = useQueryClient();
+  const { data: cats = [], isLoading } = useQuery({
+    queryKey: ['finance-categories'],
+    queryFn: api.finance.listCategories,
+  });
+
+  const [tab, setTab] = useState<'expense' | 'income'>('expense');
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmoji, setEditEmoji] = useState('');
+  const [addName, setAddName] = useState('');
+  const [addEmoji, setAddEmoji] = useState('💸');
+  const [addType, setAddType] = useState<'expense' | 'income' | 'both'>('expense');
+  const [showAdd, setShowAdd] = useState(false);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['finance-categories'] });
+    qc.invalidateQueries({ queryKey: ['finance-meta'] });
+  };
+
+  const createMut = useMutation({
+    mutationFn: (payload: FinanceCategoryIn) => api.finance.createCategory(payload),
+    onSuccess: () => { invalidate(); setAddName(''); setAddEmoji('💸'); setShowAdd(false); },
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<FinanceCategoryIn> }) =>
+      api.finance.updateCategory(id, patch),
+    onSuccess: () => { invalidate(); setEditId(null); },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => api.finance.deleteCategory(id),
+    onSuccess: invalidate,
+  });
+
+  const visibleCats = (cats as FinanceCategoryOut[]).filter(c =>
+    tab === 'expense' ? c.type === 'expense' || c.type === 'both'
+                      : c.type === 'income'  || c.type === 'both'
+  );
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)' }}>
+        {(['expense', 'income'] as const).map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            style={{
+              flex: 1, padding: '11px 0', fontSize: 13, fontWeight: 500,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: tab === t ? 'var(--fg-1)' : 'var(--fg-4)',
+              borderBottom: tab === t ? '2px solid var(--primary-500)' : '2px solid transparent',
+              marginBottom: -1, transition: 'color 150ms',
+              textTransform: 'capitalize',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Category list */}
+      <div style={{ minHeight: 80 }}>
+        {isLoading && (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--fg-4)', fontSize: 13 }}>Loading…</div>
+        )}
+        {visibleCats.map(cat => (
+          <div key={cat.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+            borderBottom: '1px solid var(--border-subtle)',
+          }}>
+            {editId === cat.id ? (
+              /* Inline edit row */
+              <>
+                <input
+                  value={editEmoji}
+                  onChange={e => setEditEmoji(e.target.value)}
+                  style={{ width: 36, textAlign: 'center', fontSize: 18, background: 'var(--surface-elev)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '2px 0' }}
+                  maxLength={2}
+                />
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') updateMut.mutate({ id: cat.id, patch: { name: editName, emoji: editEmoji } });
+                    if (e.key === 'Escape') setEditId(null);
+                  }}
+                  style={{ flex: 1, fontSize: 13, background: 'var(--surface-elev)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '4px 8px', color: 'var(--fg-1)', outline: 'none' }}
+                />
+                <button
+                  onClick={() => updateMut.mutate({ id: cat.id, patch: { name: editName, emoji: editEmoji } })}
+                  disabled={!editName.trim() || updateMut.isPending}
+                  style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 6, background: 'var(--primary-500)', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 500 }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditId(null)}
+                  style={{ fontSize: 11.5, padding: '3px 8px', borderRadius: 6, background: 'var(--surface-elev)', border: '1px solid var(--border-default)', color: 'var(--fg-3)', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              /* View row */
+              <>
+                <span style={{ fontSize: 18, width: 24, textAlign: 'center', flexShrink: 0 }}>{cat.emoji}</span>
+                <span style={{ flex: 1, fontSize: 13.5, color: 'var(--fg-1)', fontWeight: 500 }}>{cat.name}</span>
+                {cat.type === 'both' && (
+                  <span style={{ fontSize: 10.5, padding: '2px 7px', borderRadius: 999, background: 'rgba(139,124,255,0.15)', color: 'var(--primary-300)', border: '1px solid rgba(139,124,255,0.25)', fontWeight: 500 }}>both</span>
+                )}
+                {cat.is_system && (
+                  <span title="System category — cannot be deleted" style={{ fontSize: 11, color: 'var(--fg-disabled)' }}>🔒</span>
+                )}
+                <button
+                  onClick={() => { setEditId(cat.id); setEditName(cat.name); setEditEmoji(cat.emoji); }}
+                  style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 6, background: 'none', border: '1px solid var(--border-default)', color: 'var(--fg-3)', cursor: 'pointer' }}
+                >
+                  Edit
+                </button>
+                {!cat.is_system && (
+                  <button
+                    onClick={() => { if (confirm(`Delete "${cat.name}"?`)) deleteMut.mutate(cat.id); }}
+                    style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 6, background: 'none', border: '1px solid rgba(248,113,113,0.35)', color: '#f87171', cursor: 'pointer' }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add category row */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)' }}>
+        {!showAdd ? (
+          <button
+            onClick={() => { setShowAdd(true); setAddType(tab); }}
+            style={{ fontSize: 13, color: 'var(--primary-300)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 5 }}
+          >
+            <span style={{ fontSize: 16 }}>+</span> Add category
+          </button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={addEmoji}
+                onChange={e => setAddEmoji(e.target.value)}
+                style={{ width: 40, textAlign: 'center', fontSize: 18, background: 'var(--surface-elev)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '4px 0' }}
+                maxLength={2}
+                placeholder="💸"
+              />
+              <input
+                autoFocus
+                value={addName}
+                onChange={e => setAddName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && addName.trim()) createMut.mutate({ name: addName.trim(), emoji: addEmoji || '💸', type: addType }); }}
+                placeholder="Category name"
+                style={{ flex: 1, fontSize: 13, background: 'var(--surface-elev)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '6px 10px', color: 'var(--fg-1)', outline: 'none' }}
+              />
+            </div>
+            {/* Emoji quick-picks */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {EMOJI_SUGGESTIONS.map(e => (
+                <button key={e} onClick={() => setAddEmoji(e)} style={{ fontSize: 16, background: addEmoji === e ? 'rgba(139,124,255,0.20)' : 'var(--surface-elev)', border: `1px solid ${addEmoji === e ? 'rgba(139,124,255,0.40)' : 'var(--border-subtle)'}`, borderRadius: 6, padding: '2px 4px', cursor: 'pointer' }}>{e}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--fg-4)', marginRight: 2 }}>Appears in:</span>
+              {(['expense', 'income', 'both'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setAddType(t)}
+                  style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, cursor: 'pointer', fontWeight: addType === t ? 600 : 400, background: addType === t ? 'rgba(139,124,255,0.15)' : 'var(--surface-elev)', border: `1px solid ${addType === t ? 'rgba(139,124,255,0.40)' : 'var(--border-default)'}`, color: addType === t ? 'var(--primary-300)' : 'var(--fg-3)' }}
+                >
+                  {t}
+                </button>
+              ))}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                <button
+                  onClick={() => { setShowAdd(false); setAddName(''); setAddEmoji('💸'); }}
+                  style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, background: 'var(--surface-elev)', border: '1px solid var(--border-default)', color: 'var(--fg-3)', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!addName.trim() || createMut.isPending}
+                  onClick={() => createMut.mutate({ name: addName.trim(), emoji: addEmoji || '💸', type: addType })}
+                  style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, background: 'var(--primary-500)', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 500, opacity: !addName.trim() ? 0.4 : 1 }}
+                >
+                  {createMut.isPending ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            </div>
+            {createMut.isError && (
+              <p style={{ fontSize: 12, color: '#f87171', margin: 0 }}>{String(createMut.error)}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modules panel
+// ---------------------------------------------------------------------------
+
+function ModulesPanel() {
+  const { isEnabled, setEnabled } = useModules();
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+      {/* Dashboard — always on, locked */}
+      <div
+        className="card"
+        style={{ padding: 20 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 22 }}>🏠</span>
+            <span style={{ font: '500 14px/1.2 var(--font-sans)', color: 'var(--fg-1)' }}>Dashboard</span>
+          </div>
+          <span style={{
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+            padding: '2px 8px', borderRadius: 999,
+            background: 'rgba(139,124,255,0.12)', color: 'var(--primary-300)',
+            border: '1px solid rgba(139,124,255,0.25)',
+          }}>
+            Always on
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-4)', lineHeight: 1.5 }}>
+          Your personal OS home screen — stats, AI briefing, and quick links.
+        </p>
+      </div>
+
+      {MODULE_CONFIGS.map((mod) => {
+        const on = isEnabled(mod.id);
+        return (
+          <div
+            key={mod.id}
+            className="card"
+            style={{
+              padding: 20,
+              opacity: on ? 1 : 0.55,
+              transition: 'opacity 150ms',
+              cursor: 'pointer',
+            }}
+            onClick={() => setEnabled(mod.id, !on)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>{mod.icon}</span>
+                <span style={{ font: '500 14px/1.2 var(--font-sans)', color: 'var(--fg-1)' }}>{mod.label}</span>
+              </div>
+              {/* Toggle pill */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setEnabled(mod.id, !on); }}
+                aria-label={on ? `Disable ${mod.label}` : `Enable ${mod.label}`}
+                style={{
+                  width: 42, height: 24, borderRadius: 12, flexShrink: 0,
+                  background: on ? 'var(--primary-500)' : 'rgba(255,255,255,0.12)',
+                  border: 'none', cursor: 'pointer', position: 'relative',
+                  transition: 'background 200ms',
+                }}
+              >
+                <span style={{
+                  display: 'block', width: 18, height: 18, borderRadius: '50%',
+                  background: 'white', position: 'absolute', top: 3,
+                  left: on ? 21 : 3, transition: 'left 200ms',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }} />
+              </button>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-4)', lineHeight: 1.5 }}>
+              {mod.description}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Settings page
 // ---------------------------------------------------------------------------
+// ── SMS Setup Panel ─────────────────────────────────────────────────────────
+
+function SmsSetupPanel() {
+  const qc = useQueryClient();
+
+  const statusQ = useQuery({
+    queryKey: ['sms-status'],
+    queryFn: () => api.sms.status(),
+    staleTime: 30_000,
+  });
+
+  // API key state — load from backend settings
+  const settingsQ = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api.settings.getAll(),
+    staleTime: Infinity,
+  });
+
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeyDirty, setApiKeyDirty] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+  const [debugData, setDebugData] = useState<Record<string, unknown> | null>(null);
+  const [debugging, setDebugging] = useState(false);
+
+  // Encryption key state
+  const [encKey, setEncKey] = useState('');
+  const [encKeyDirty, setEncKeyDirty] = useState(false);
+  const [savingEncKey, setSavingEncKey] = useState(false);
+  const [encKeySaved, setEncKeySaved] = useState(false);
+  const [showEncKey, setShowEncKey] = useState(false);
+
+  // Populate inputs when settings load
+  useEffect(() => {
+    const stored = settingsQ.data?.http_sms_api_key ?? '';
+    if (stored && !apiKeyDirty) setApiKey(stored);
+    const storedEnc = settingsQ.data?.http_sms_encryption_key ?? '';
+    if (storedEnc && !encKeyDirty) setEncKey(storedEnc);
+  }, [settingsQ.data, apiKeyDirty, encKeyDirty]);
+
+  async function saveApiKey() {
+    setSavingKey(true);
+    try {
+      await api.settings.update({ http_sms_api_key: apiKey.trim() });
+      setApiKeyDirty(false);
+      setKeySaved(true);
+      setTimeout(() => setKeySaved(false), 2000);
+      qc.invalidateQueries({ queryKey: ['sms-status'] });
+      qc.invalidateQueries({ queryKey: ['settings'] });
+    } finally {
+      setSavingKey(false);
+    }
+  }
+
+  async function saveEncKey() {
+    setSavingEncKey(true);
+    try {
+      await api.settings.update({ http_sms_encryption_key: encKey.trim() });
+      setEncKeyDirty(false);
+      setEncKeySaved(true);
+      setTimeout(() => setEncKeySaved(false), 2000);
+      qc.invalidateQueries({ queryKey: ['sms-status'] });
+      qc.invalidateQueries({ queryKey: ['settings'] });
+    } finally {
+      setSavingEncKey(false);
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const res = await api.sms.syncHttpSms();
+      const checked = (res as any).messages_checked ?? 0;
+      setSyncMsg(res.new_transactions > 0
+        ? `✓ ${res.new_transactions} new transaction${res.new_transactions > 1 ? 's' : ''} found (${checked} messages scanned).`
+        : `✓ Scanned ${checked} messages — no new transactions.`);
+      qc.invalidateQueries({ queryKey: ['sms-pending'] });
+      qc.invalidateQueries({ queryKey: ['sms-status'] });
+    } catch (e: unknown) {
+      setSyncMsg(e instanceof Error ? e.message : 'Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleDebug() {
+    setDebugging(true);
+    setDebugData(null);
+    try {
+      const res = await api.sms.debug();
+      setDebugData(res);
+    } catch (e: unknown) {
+      setDebugData({ error: e instanceof Error ? e.message : 'Debug failed' });
+    } finally {
+      setDebugging(false);
+    }
+  }
+
+  const status = statusQ.data;
+  const imAvail = status?.imessage_available ?? false;
+  const httpSmsConfigured = status?.httpsms_configured ?? false;
+  const encryptionEnabled = (status as any)?.httpsms_encryption_enabled ?? false;
+  const lastSync = status?.httpsms_last_sync;
+
+  function fmtLastSync(iso: string | null | undefined) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  const codeSty: React.CSSProperties = {
+    display: 'block', padding: '10px 14px', borderRadius: 9,
+    background: 'var(--surface-elev)', border: '1px solid var(--border-default)',
+    color: 'var(--fg-2)', fontSize: 12, fontFamily: 'var(--font-mono)',
+    wordBreak: 'break-all', userSelect: 'all' as const,
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* ── HTTP SMS card ── */}
+      <div className="card" style={{ padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 18 }}>📱</span>
+          <h4 style={{ margin: 0, font: '500 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>
+            HTTP SMS (Android)
+          </h4>
+          {httpSmsConfigured && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+              padding: '2px 7px', borderRadius: 999,
+              background: 'rgba(61,255,152,0.12)', color: 'var(--accent-green)',
+              border: '1px solid rgba(61,255,152,0.25)',
+            }}>Connected</span>
+          )}
+        </div>
+        <p style={{ margin: '0 0 16px', fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.6 }}>
+          You've installed <strong style={{ color: 'var(--fg-2)' }}>HTTP SMS</strong> — great. No forwarding rules needed.
+          The app automatically sends all SMS to their cloud. Paste your API key below and click <em>Sync</em> to pull bank transactions in.
+        </p>
+
+        {/* API key input row */}
+        <Label>HTTP SMS API Key</Label>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              type="password"
+              value={apiKey}
+              placeholder="Paste your API key from httpsms.com/keys"
+              onChange={(e) => { setApiKey(e.target.value); setApiKeyDirty(true); }}
+              className={inputCls}
+              style={{ paddingRight: apiKey ? 32 : undefined }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={saveApiKey}
+            disabled={!apiKey.trim() || savingKey}
+            className="px-4 py-2 rounded-lg text-xs font-medium text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 disabled:opacity-40 transition-all"
+          >
+            {savingKey ? 'Saving…' : keySaved ? '✓ Saved' : 'Save'}
+          </button>
+        </div>
+
+        {/* Sync button + last sync */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={!httpSmsConfigured || syncing}
+            className="px-4 py-2 rounded-lg text-xs font-medium text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 disabled:opacity-40 transition-all"
+          >
+            {syncing ? 'Syncing…' : 'Sync now'}
+          </button>
+          {lastSync && !syncMsg && (
+            <span style={{ fontSize: 11.5, color: 'var(--fg-disabled)' }}>
+              Last sync: {fmtLastSync(lastSync)}
+            </span>
+          )}
+          {syncMsg && (
+            <span style={{ fontSize: 12, color: syncMsg.startsWith('✓') ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+              {syncMsg}
+            </span>
+          )}
+        </div>
+
+        <p style={{ margin: '12px 0 0', fontSize: 11.5, color: 'var(--fg-disabled)', lineHeight: 1.5 }}>
+          Get your key at <strong>httpsms.com → API Keys</strong>. The app will filter for bank senders automatically (HDFCBK, ICICIB, SBI, Axis, etc.).
+        </p>
+
+        {/* ── E2E Encryption ── */}
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 13 }}>🔒</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-2)' }}>End-to-End Encryption</span>
+            {encryptionEnabled && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                padding: '2px 7px', borderRadius: 999,
+                background: 'rgba(61,255,152,0.12)', color: 'var(--accent-green)',
+                border: '1px solid rgba(61,255,152,0.25)',
+              }}>Enabled</span>
+            )}
+          </div>
+          <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--fg-4)', lineHeight: 1.6 }}>
+            If you've set an encryption key in the HTTP SMS Android app (Settings → Encryption Key),
+            paste the same passphrase here. Messages will be AES-256 decrypted before being parsed.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <input
+                type={showEncKey ? 'text' : 'password'}
+                value={encKey}
+                placeholder="Passphrase from HTTP SMS Android app"
+                onChange={(e) => { setEncKey(e.target.value); setEncKeyDirty(true); }}
+                className={inputCls}
+                style={{ paddingRight: 32 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowEncKey((v) => !v)}
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                  color: 'var(--fg-4)',
+                }}
+              >
+                {showEncKey
+                  ? <EyeOff style={{ width: 14, height: 14 }} />
+                  : <Eye style={{ width: 14, height: 14 }} />
+                }
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={saveEncKey}
+              disabled={!encKey.trim() || savingEncKey}
+              className="px-4 py-2 rounded-lg text-xs font-medium text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 disabled:opacity-40 transition-all"
+            >
+              {savingEncKey ? 'Saving…' : encKeySaved ? '✓ Saved' : 'Save'}
+            </button>
+          </div>
+        </div>
+
+        {/* Debug section */}
+        {httpSmsConfigured && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={handleDebug}
+                disabled={debugging}
+                style={{
+                  padding: '5px 12px', borderRadius: 7, fontSize: 11.5, fontWeight: 500,
+                  background: 'var(--surface-elev)', border: '1px solid var(--border-default)',
+                  color: 'var(--fg-4)', cursor: debugging ? 'default' : 'pointer',
+                  opacity: debugging ? 0.6 : 1,
+                }}
+              >
+                {debugging ? 'Running…' : '🔍 Diagnose'}
+              </button>
+              <span style={{ fontSize: 11.5, color: 'var(--fg-disabled)' }}>
+                Shows what threads &amp; messages the API returns
+              </span>
+            </div>
+
+            {debugData && (
+              <div style={{ marginTop: 10 }}>
+                {/* Threads summary */}
+                {Array.isArray((debugData as any).threads) && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginBottom: 6 }}>
+                      <strong style={{ color: 'var(--fg-2)' }}>{(debugData as any).threads.length}</strong> threads found
+                      {' · '}<strong style={{ color: 'var(--accent-green)' }}>
+                        {(debugData as any).threads.filter((t: any) => t.is_bank).length}
+                      </strong> matched as bank senders
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(debugData as any).threads.map((t: any, i: number) => (
+                        <span key={i} style={{
+                          fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                          background: t.is_bank ? 'rgba(61,255,152,0.10)' : 'var(--surface-elev)',
+                          border: `1px solid ${t.is_bank ? 'rgba(61,255,152,0.25)' : 'var(--border-subtle)'}`,
+                          color: t.is_bank ? 'var(--accent-green)' : 'var(--fg-4)',
+                        }}>
+                          {t.contact}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Parse samples */}
+                {Array.isArray((debugData as any).parse_samples) && (debugData as any).parse_samples.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginBottom: 6 }}>Sample message parse results:</div>
+                    {(debugData as any).parse_samples.map((s: any, i: number) => (
+                      <div key={i} style={{
+                        padding: '8px 10px', borderRadius: 8, marginBottom: 6,
+                        background: 'var(--surface-elev)', border: '1px solid var(--border-subtle)',
+                        fontSize: 11.5,
+                      }}>
+                        <div style={{ color: 'var(--fg-3)', marginBottom: 3, fontFamily: 'var(--font-mono)' }}>
+                          [{s.sender}] {s.body_preview}
+                        </div>
+                        <div style={{ color: s.parsed_ok ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {s.parsed_ok
+                            ? `✓ Parsed — ${s.parsed_type} ₹${s.parsed_amount}`
+                            : '✗ Not recognised as a transaction'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Always show full raw JSON — essential when threads=0 */}
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ fontSize: 11.5, color: 'var(--fg-4)', cursor: 'pointer' }}>
+                    Raw API response
+                  </summary>
+                  <pre style={{
+                    ...codeSty,
+                    marginTop: 6, maxHeight: 400, overflow: 'auto',
+                    fontSize: 10.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                  }}>
+                    {JSON.stringify(debugData, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── iMessage card ── */}
+      <div className="card" style={{ padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 18 }}>💻</span>
+          <h4 style={{ margin: 0, font: '500 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>
+            macOS iMessage Relay
+          </h4>
+          {imAvail != null && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+              padding: '2px 7px', borderRadius: 999,
+              background: imAvail ? 'rgba(61,255,152,0.12)' : 'rgba(255,255,255,0.05)',
+              color: imAvail ? 'var(--accent-green)' : 'var(--fg-4)',
+              border: `1px solid ${imAvail ? 'rgba(61,255,152,0.25)' : 'rgba(255,255,255,0.08)'}`,
+            }}>
+              {imAvail ? '✓ Available' : 'Not detected'}
+            </span>
+          )}
+        </div>
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.6 }}>
+          {imAvail
+            ? 'Messages.db found. Use the "Scan iMessage" button in Finance to pull recent bank SMS directly from your Mac.'
+            : 'Enable iPhone → Settings → Messages → Text Message Forwarding → this Mac. Then SMS sync to Mac Messages and we can read them locally.'}
+        </p>
+      </div>
+
+    </div>
+  );
+}
+
+// ── App Lock Panel ──────────────────────────────────────────────────────────
+
+function AppLockPanel() {
+  const [isSet, setIsSet]           = useState(() => !!getLockHash());
+  const [mode, setMode]             = useState<'idle' | 'set' | 'change' | 'remove'>('idle');
+  const [newPin, setNewPin]         = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [currentPin, setCurrentPin] = useState('');
+  const [error, setError]           = useState('');
+  const [saved, setSaved]           = useState(false);
+  const [busy, setBusy]             = useState(false);
+
+  // Biometric
+  const [bioAvail, setBioAvail]       = useState(false);
+  const [bioEnabled, setBioEnabled]   = useState(() => !!getBiometricCredId());
+  const [bioLoading, setBioLoading]   = useState(false);
+  const [bioError, setBioError]       = useState('');
+  const [bioDisabling, setBioDisabling] = useState(false); // show inline PIN form
+  const [bioPin, setBioPin]           = useState('');
+  const [bioBusy, setBioBusy]         = useState(false);
+
+  useEffect(() => { isBiometricAvailable().then(setBioAvail); }, []);
+
+  function reset() {
+    setMode('idle');
+    setNewPin(''); setConfirmPin(''); setCurrentPin('');
+    setError(''); setBusy(false);
+  }
+
+  function flashSaved() {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleSet() {
+    if (newPin.length < 4) { setError('Minimum 4 characters'); return; }
+    if (newPin !== confirmPin) { setError("Passwords don't match"); return; }
+    setBusy(true);
+    setLockHash(await hashLock(newPin));
+    setIsSet(true);
+    reset();
+    flashSaved();
+  }
+
+  async function handleChange() {
+    setBusy(true);
+    if ((await hashLock(currentPin)) !== getLockHash()) {
+      setError('Current PIN is incorrect'); setBusy(false); return;
+    }
+    if (newPin.length < 4) { setError('Minimum 4 characters'); setBusy(false); return; }
+    if (newPin !== confirmPin) { setError("Passwords don't match"); setBusy(false); return; }
+    setLockHash(await hashLock(newPin));
+    reset();
+    flashSaved();
+  }
+
+  async function handleRemove() {
+    setBusy(true);
+    if ((await hashLock(currentPin)) !== getLockHash()) {
+      setError('Wrong PIN or password'); setBusy(false); return;
+    }
+    clearLockHash();
+    clearBiometricCredId();
+    setBioEnabled(false);
+    setIsSet(false);
+    reset();
+  }
+
+  async function handleEnableBiometric() {
+    setBioError(''); setBioLoading(true);
+    try {
+      const credId = await registerBiometric();
+      setBiometricCredId(credId);
+      setBioEnabled(true);
+    } catch {
+      setBioError('Biometric setup was cancelled or not supported on this device.');
+    } finally {
+      setBioLoading(false);
+    }
+  }
+
+  async function handleDisableBiometric() {
+    setBioBusy(true);
+    setBioError('');
+    if ((await hashLock(bioPin)) !== getLockHash()) {
+      setBioError('Wrong PIN or password'); setBioBusy(false); return;
+    }
+    clearBiometricCredId();
+    setBioEnabled(false);
+    setBioDisabling(false);
+    setBioPin('');
+    setBioBusy(false);
+  }
+
+  const errorBox = (msg: string) => (
+    <p style={{ margin: 0, fontSize: 12, color: 'var(--accent-red)', padding: '6px 10px', background: 'rgba(255,91,110,0.08)', borderRadius: 6 }}>
+      {msg}
+    </p>
+  );
+
+  const pinInput = (label: string, val: string, set: (v: string) => void, opts?: { autoFocus?: boolean; hasError?: boolean; onEnter?: () => void; disabled?: boolean }) => (
+    <div>
+      <label style={{ display: 'block', fontSize: 11.5, color: 'var(--fg-4)', marginBottom: 5 }}>{label}</label>
+      <input
+        type="password"
+        value={val}
+        autoFocus={opts?.autoFocus}
+        autoComplete="new-password"
+        placeholder="••••••"
+        disabled={opts?.disabled ?? busy}
+        onKeyDown={(e) => { if (e.key === 'Enter' && opts?.onEnter) opts.onEnter(); }}
+        onChange={(e) => { set(e.target.value); setError(''); }}
+        style={{
+          width: '100%', padding: '9px 12px', borderRadius: 9,
+          background: 'var(--surface-elev)',
+          border: `1px solid ${opts?.hasError ? 'rgba(255,91,110,0.4)' : 'rgba(255,255,255,0.08)'}`,
+          color: 'var(--fg-1)', fontSize: 14,
+          letterSpacing: '0.15em', outline: 'none', boxSizing: 'border-box',
+          opacity: (opts?.disabled ?? busy) ? 0.6 : 1,
+        }}
+      />
+    </div>
+  );
+
+  const showBioCard = isSet && (bioAvail || bioEnabled);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+      {/* ── PIN / password card ── */}
+      <div className="card" style={{ padding: 22 }}>
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: mode !== 'idle' ? 20 : 0 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 16 }}>{isSet ? '🔐' : '🔓'}</span>
+              <h4 style={{ margin: 0, font: '500 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>App Lock</h4>
+              {isSet && (
+                <span style={{
+                  fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  padding: '2px 7px', borderRadius: 999,
+                  background: 'rgba(61,255,152,0.12)', color: 'var(--accent-green)',
+                  border: '1px solid rgba(61,255,152,0.25)',
+                }}>ON</span>
+              )}
+              {saved && (
+                <span style={{ fontSize: 11, color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <Check style={{ width: 11, height: 11 }} /> Saved
+                </span>
+              )}
+            </div>
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.5 }}>
+              {isSet
+                ? 'A PIN or password is required every time the app starts.'
+                : 'Require a PIN or password whenever the app is opened.'}
+            </p>
+          </div>
+
+          {mode === 'idle' && (
+            <div style={{ display: 'flex', gap: 6, marginLeft: 16, flexShrink: 0 }}>
+              {isSet ? (
+                <>
+                  <BtnSecondary onClick={() => setMode('change')}>Change PIN</BtnSecondary>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('remove'); setCurrentPin(''); setError(''); }}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                      background: 'rgba(255,91,110,0.08)', border: '1px solid rgba(255,91,110,0.30)',
+                      color: 'var(--accent-red)', transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,91,110,0.18)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,91,110,0.08)')}
+                  >
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <BtnPrimary onClick={() => setMode('set')}>Set PIN / Password</BtnPrimary>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Set form ── */}
+        {mode === 'set' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pinInput('New PIN or password', newPin, setNewPin, { autoFocus: true, hasError: !!error, onEnter: handleSet })}
+            {pinInput('Confirm', confirmPin, setConfirmPin, { hasError: !!error, onEnter: handleSet })}
+            {error && errorBox(error)}
+            <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+              <BtnPrimary onClick={handleSet} disabled={busy}>{busy ? 'Saving…' : 'Save'}</BtnPrimary>
+              <BtnSecondary onClick={reset} disabled={busy}>Cancel</BtnSecondary>
+            </div>
+          </div>
+        )}
+
+        {/* ── Change form ── */}
+        {mode === 'change' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pinInput('Current PIN or password', currentPin, setCurrentPin, { autoFocus: true, hasError: !!error, onEnter: handleChange })}
+            {pinInput('New PIN or password', newPin, setNewPin, { hasError: !!error, onEnter: handleChange })}
+            {pinInput('Confirm new', confirmPin, setConfirmPin, { hasError: !!error, onEnter: handleChange })}
+            {error && errorBox(error)}
+            <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+              <BtnPrimary onClick={handleChange} disabled={busy}>{busy ? 'Updating…' : 'Update PIN'}</BtnPrimary>
+              <BtnSecondary onClick={reset} disabled={busy}>Cancel</BtnSecondary>
+            </div>
+          </div>
+        )}
+
+        {/* ── Remove form ── */}
+        {mode === 'remove' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-3)' }}>
+              Enter your current PIN or password to remove the lock.
+            </p>
+            {pinInput('Current PIN or password', currentPin, setCurrentPin, { autoFocus: true, hasError: !!error, onEnter: handleRemove })}
+            {error && errorBox(error)}
+            <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={busy || !currentPin}
+                style={{
+                  padding: '7px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                  cursor: busy || !currentPin ? 'default' : 'pointer',
+                  background: 'rgba(255,91,110,0.12)', border: '1px solid rgba(255,91,110,0.35)',
+                  color: 'var(--accent-red)', transition: 'background 0.12s',
+                  opacity: busy || !currentPin ? 0.5 : 1,
+                }}
+              >
+                {busy ? 'Verifying…' : 'Remove lock'}
+              </button>
+              <BtnSecondary onClick={reset} disabled={busy}>Cancel</BtnSecondary>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Biometric card ── */}
+      {showBioCard && (
+        <div className="card" style={{ padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 16 }}>🫆</span>
+                <h4 style={{ margin: 0, font: '500 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>
+                  Fingerprint / Face ID
+                </h4>
+                {bioEnabled && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                    padding: '2px 7px', borderRadius: 999,
+                    background: 'rgba(61,255,152,0.12)', color: 'var(--accent-green)',
+                    border: '1px solid rgba(61,255,152,0.25)',
+                  }}>ON</span>
+                )}
+              </div>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.5 }}>
+                {bioEnabled
+                  ? 'Biometric unlock is active. PIN still works as a fallback.'
+                  : bioAvail
+                    ? 'Skip the PIN prompt — use Touch ID / Face ID to unlock instantly.'
+                    : 'Biometric was registered but may not be available right now.'}
+              </p>
+            </div>
+
+            <div style={{ marginLeft: 16, flexShrink: 0 }}>
+              {bioEnabled && !bioDisabling ? (
+                <button
+                  type="button"
+                  onClick={() => { setBioDisabling(true); setBioPin(''); setBioError(''); }}
+                  style={{
+                    padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    background: 'rgba(255,91,110,0.08)', border: '1px solid rgba(255,91,110,0.30)',
+                    color: 'var(--accent-red)', transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,91,110,0.18)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,91,110,0.08)')}
+                >
+                  Disable
+                </button>
+              ) : !bioEnabled ? (
+                <BtnPrimary onClick={handleEnableBiometric} disabled={bioLoading || !bioAvail}>
+                  {bioLoading ? 'Setting up…' : 'Enable'}
+                </BtnPrimary>
+              ) : null}
+            </div>
+          </div>
+
+          {/* ── Inline PIN form when disabling biometric ── */}
+          {bioDisabling && (
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-3)' }}>
+                Enter your PIN or password to confirm.
+              </p>
+              <input
+                type="password"
+                value={bioPin}
+                autoFocus
+                autoComplete="current-password"
+                placeholder="••••••"
+                disabled={bioBusy}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleDisableBiometric(); }}
+                onChange={(e) => { setBioPin(e.target.value); setBioError(''); }}
+                style={{
+                  width: '100%', padding: '9px 12px', borderRadius: 9,
+                  background: 'var(--surface-elev)',
+                  border: `1px solid ${bioError ? 'rgba(255,91,110,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                  color: 'var(--fg-1)', fontSize: 14,
+                  letterSpacing: '0.15em', outline: 'none', boxSizing: 'border-box',
+                  opacity: bioBusy ? 0.6 : 1,
+                }}
+              />
+              {bioError && (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--accent-red)', padding: '6px 10px', background: 'rgba(255,91,110,0.08)', borderRadius: 6 }}>
+                  {bioError}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleDisableBiometric}
+                  disabled={bioBusy || !bioPin}
+                  style={{
+                    padding: '7px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                    cursor: bioBusy || !bioPin ? 'default' : 'pointer',
+                    background: 'rgba(255,91,110,0.12)', border: '1px solid rgba(255,91,110,0.35)',
+                    color: 'var(--accent-red)', transition: 'background 0.12s',
+                    opacity: bioBusy || !bioPin ? 0.5 : 1,
+                  }}
+                >
+                  {bioBusy ? 'Verifying…' : 'Confirm disable'}
+                </button>
+                <BtnSecondary onClick={() => { setBioDisabling(false); setBioPin(''); setBioError(''); }} disabled={bioBusy}>
+                  Cancel
+                </BtnSecondary>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ── Notification settings panel ──────────────────────────────────────────────
+
+/** Reusable toggle pill */
+function NotifToggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      style={{
+        width: 46, height: 26, borderRadius: 13, flexShrink: 0,
+        background: on ? 'var(--primary-500)' : 'rgba(255,255,255,0.12)',
+        border: 'none', cursor: 'pointer', position: 'relative',
+        transition: 'background 200ms',
+      }}
+    >
+      <span style={{
+        display: 'block', width: 20, height: 20, borderRadius: '50%',
+        background: 'white', position: 'absolute', top: 3,
+        left: on ? 23 : 3, transition: 'left 200ms',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+      }} />
+    </button>
+  );
+}
+
+/** Convert 24h "HH:MM" to "H:MMam/pm" */
+function fmt12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const suffix = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 || 12;
+  return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2, '0')}${suffix}`;
+}
+
+const timeInputCls =
+  'rounded-lg px-3 py-1.5 text-sm tabular-nums text-ink-200 outline-none '
+  + 'bg-[var(--surface-elev)] border border-[rgba(255,255,255,0.08)] '
+  + 'focus:border-[rgba(139,124,255,0.50)]';
+
+function NotificationSettingsPanel() {
+  const qc = useQueryClient();
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => api.settings.getAll(),
+    staleTime: Infinity,
+  });
+
+  // State for every row
+  const [briefingEnabled, setBriefingEnabled] = useState(true);
+  const [briefingTime,    setBriefingTime]    = useState('08:30');
+  const [habitEnabled,    setHabitEnabled]    = useState(true);
+  const [subEnabled,      setSubEnabled]      = useState(true);
+  const [subDays,         setSubDays]         = useState('3');
+  const [budgetEnabled,   setBudgetEnabled]   = useState(false);
+  const [quietStart,      setQuietStart]      = useState('22:00');
+  const [quietEnd,        setQuietEnd]        = useState('07:00');
+
+  const [saved,      setSaved]      = useState(false);
+  const [testing,    setTesting]    = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const [browserPermission, setBrowserPermission] = useState<string>(() =>
+    'Notification' in window ? Notification.permission : 'not-supported',
+  );
+
+  const initialised = useRef(false);
+  useEffect(() => {
+    if (!settings || initialised.current) return;
+    initialised.current = true;
+    setBriefingEnabled((settings['notif.morning_briefing_enabled'] as string) !== 'false');
+    setBriefingTime((settings['notif.morning_briefing_time'] as string) || '08:30');
+    setHabitEnabled((settings['notif.habit_reminder_enabled'] as string) !== 'false');
+    setSubEnabled((settings['notif.sub_alert_enabled'] as string) !== 'false');
+    setSubDays((settings['notif.sub_alert_days_before'] as string) || '3');
+    setBudgetEnabled((settings['notif.budget_warning_enabled'] as string) === 'true');
+    setQuietStart((settings['notif.quiet_start'] as string) || '22:00');
+    setQuietEnd((settings['notif.quiet_end'] as string) || '07:00');
+  }, [settings]);
+
+  async function handleSave() {
+    await api.settings.update({
+      'notif.morning_briefing_enabled': briefingEnabled ? 'true' : 'false',
+      'notif.morning_briefing_time':    briefingTime,
+      'notif.habit_reminder_enabled':   habitEnabled ? 'true' : 'false',
+      'notif.sub_alert_enabled':        subEnabled ? 'true' : 'false',
+      'notif.sub_alert_days_before':    subDays,
+      'notif.budget_warning_enabled':   budgetEnabled ? 'true' : 'false',
+      'notif.quiet_start':              quietStart,
+      'notif.quiet_end':                quietEnd,
+    });
+    try { await fetch('/api/v1/notifications/reschedule', { method: 'POST' }); } catch {}
+    qc.invalidateQueries({ queryKey: ['settings'] });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  async function requestPermission() {
+    if (!('Notification' in window)) return;
+    setBrowserPermission(await Notification.requestPermission());
+  }
+
+  async function handleTest(type: string) {
+    setTesting(type);
+    setTestResult(null);
+    try {
+      let res: { created: number };
+      if (type === 'briefing') res = await api.notifications.triggerMorningBriefing();
+      else if (type === 'habit') res = await api.notifications.triggerHabitCheck();
+      else if (type === 'sub')   res = await api.notifications.triggerSubCheck();
+      else                       res = await api.notifications.triggerBudgetCheck();
+      setTestResult(res.created > 0
+        ? `✓ ${res.created} notification${res.created !== 1 ? 's' : ''} created`
+        : '— Nothing pending right now');
+      qc.invalidateQueries({ queryKey: ['notif-count'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (e: unknown) {
+      setTestResult(`Error: ${e instanceof Error ? e.message : 'failed'}`);
+    } finally {
+      setTesting(null);
+    }
+  }
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)',
+  };
+  const lastRowStyle: React.CSSProperties = { ...rowStyle, borderBottom: 'none' };
+
+  const permGranted = browserPermission === 'granted';
+  const permDenied  = browserPermission === 'denied';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Browser permission banner — only shown when not yet granted */}
+      {!permGranted && (
+        <div
+          className="card"
+          style={{
+            padding: '14px 20px', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', gap: 16,
+            background: permDenied ? 'rgba(255,91,110,0.06)' : 'rgba(139,124,255,0.06)',
+            border: `1px solid ${permDenied ? 'rgba(255,91,110,0.20)' : 'rgba(139,124,255,0.20)'}`,
+          }}
+        >
+          <div>
+            <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--fg-1)' }}>
+              {permDenied ? '🚫 Notifications blocked' : '🔔 Enable desktop notifications'}
+            </span>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--fg-4)' }}>
+              {permDenied
+                ? 'Unblock in your browser site settings to receive alerts.'
+                : 'Get OS-level popups when new alerts arrive — even in background.'}
+            </p>
+          </div>
+          {!permDenied && (
+            <button
+              type="button"
+              onClick={requestPermission}
+              className="px-4 py-2 rounded-lg text-xs font-medium text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 transition-colors shrink-0"
+            >
+              Allow
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Main settings card */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+
+        {/* ── Morning briefing ── */}
+        <div style={rowStyle}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg-1)', marginBottom: 4 }}>
+              Morning briefing
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fg-4)' }}>
+              A short summary of habits, journal and finance at the start of the day.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 24, flexShrink: 0 }}>
+            <input
+              type="time"
+              value={briefingTime}
+              disabled={!briefingEnabled}
+              onChange={(e) => setBriefingTime(e.target.value)}
+              className={timeInputCls}
+              style={{ opacity: briefingEnabled ? 1 : 0.4 }}
+            />
+            <NotifToggle on={briefingEnabled} onChange={setBriefingEnabled} />
+          </div>
+        </div>
+
+        {/* ── Habit reminders ── */}
+        <div style={rowStyle}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg-1)', marginBottom: 4 }}>
+              Habit reminders
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fg-4)' }}>
+              One ping per day if there are still unchecked habits at {fmt12('21:00')}.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 24, flexShrink: 0 }}>
+            <NotifToggle on={habitEnabled} onChange={setHabitEnabled} />
+          </div>
+        </div>
+
+        {/* ── Subscription alerts ── */}
+        <div style={rowStyle}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg-1)', marginBottom: 4 }}>
+              Subscription alerts
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fg-4)' }}>
+              Warn{' '}
+              <select
+                value={subDays}
+                onChange={(e) => setSubDays(e.target.value)}
+                style={{
+                  fontSize: 13, color: 'var(--fg-2)', background: 'var(--surface-elev)',
+                  border: '1px solid var(--border-default)', borderRadius: 6,
+                  padding: '1px 4px', cursor: 'pointer', outline: 'none',
+                }}
+              >
+                {['1', '2', '3', '5', '7'].map((d) => (
+                  <option key={d} value={d}>{d} day{d !== '1' ? 's' : ''}</option>
+                ))}
+              </select>
+              {' '}before any renewal.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 24, flexShrink: 0 }}>
+            <NotifToggle on={subEnabled} onChange={setSubEnabled} />
+          </div>
+        </div>
+
+        {/* ── Budget warnings ── */}
+        <div style={rowStyle}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg-1)', marginBottom: 4 }}>
+              Budget warnings
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fg-4)' }}>
+              Notify when any category crosses 80% of its monthly budget.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 24, flexShrink: 0 }}>
+            <NotifToggle on={budgetEnabled} onChange={setBudgetEnabled} />
+          </div>
+        </div>
+
+        {/* ── Quiet hours ── */}
+        <div style={lastRowStyle}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg-1)', marginBottom: 4 }}>
+              Quiet hours
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--fg-4)' }}>
+              No pings during these hours.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 24, flexShrink: 0 }}>
+            <input
+              type="time"
+              value={quietStart}
+              onChange={(e) => setQuietStart(e.target.value)}
+              className={timeInputCls}
+            />
+            <span style={{ fontSize: 12, color: 'var(--fg-4)' }}>to</span>
+            <input
+              type="time"
+              value={quietEnd}
+              onChange={(e) => setQuietEnd(e.target.value)}
+              className={timeInputCls}
+            />
+          </div>
+        </div>
+
+      </div>
+
+      {/* Test row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11.5, color: 'var(--fg-4)', marginRight: 4 }}>Test now:</span>
+        {([
+          { key: 'briefing', label: '☀️ Briefing',    enabled: briefingEnabled },
+          { key: 'habit',    label: '🔥 Habits',      enabled: habitEnabled },
+          { key: 'sub',      label: '🔄 Subs',        enabled: subEnabled },
+          { key: 'budget',   label: '💰 Budget',      enabled: budgetEnabled },
+        ] as const).map(({ key, label, enabled }) => (
+          <button
+            key={key}
+            type="button"
+            disabled={!enabled || !!testing}
+            onClick={() => handleTest(key)}
+            style={{
+              fontSize: 11.5, padding: '4px 10px', borderRadius: 6,
+              background: 'var(--surface-elev)', border: '1px solid var(--border-default)',
+              color: 'var(--fg-3)', cursor: !enabled || !!testing ? 'default' : 'pointer',
+              opacity: !enabled || !!testing ? 0.35 : 1,
+              transition: 'opacity 150ms',
+            }}
+          >
+            {testing === key ? '…' : label}
+          </button>
+        ))}
+        {testResult && (
+          <span style={{
+            fontSize: 12, marginLeft: 6,
+            color: testResult.startsWith('✓') ? 'var(--accent-green)' : 'var(--fg-3)',
+          }}>
+            {testResult}
+          </span>
+        )}
+      </div>
+
+      {/* Save */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="px-4 py-2 rounded-lg text-xs font-medium text-accent border border-accent/40 bg-accent/10 hover:bg-accent/20 transition-colors"
+        >
+          Save settings
+        </button>
+        {saved && (
+          <span style={{ fontSize: 11, color: 'var(--accent-green)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Check style={{ width: 11, height: 11 }} /> Saved
+          </span>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+// ── Settings page ────────────────────────────────────────────────────────────
+
 export function Settings() {
   const qc = useQueryClient();
 
@@ -153,9 +1657,21 @@ export function Settings() {
   });
   const liveModels = liveModelsResp?.models ?? [];
 
+  // Quick health probe — runs on mount and after saving AI settings
+  const { data: healthResult, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
+    queryKey: ['settings-health'],
+    queryFn: api.settings.llmHealth,
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
   // ── Profile form state ─────────────────────────────────────────────
   const [profileName, setProfileName] = useState('');
   const [profileCurrency, setProfileCurrency] = useState('INR');
+  const [profileTimezone, setProfileTimezone] = useState(
+    () => localStorage.getItem('user_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
   const [profileDirty, setProfileDirty] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
@@ -182,13 +1698,19 @@ export function Settings() {
     const lsName = localStorage.getItem('user_name') ?? '';
     const lsCurrency = localStorage.getItem('sub_display_currency') ?? 'INR';
 
+    const backendTimezone = (savedSettings['profile.timezone'] as string) || '';
+    const lsTimezone = localStorage.getItem('user_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     const name = backendName || lsName;
     const currency = backendCurrency || lsCurrency;
+    const timezone = backendTimezone || lsTimezone;
     setProfileName(name);
     setProfileCurrency(currency);
+    setProfileTimezone(timezone);
     // Sync localStorage from backend values
     if (name) localStorage.setItem('user_name', name);
     if (currency) localStorage.setItem('sub_display_currency', currency);
+    if (timezone) localStorage.setItem('user_timezone', timezone);
 
     // AI
     setProvider((savedSettings['ai.provider'] as ProviderId) || 'local');
@@ -202,11 +1724,12 @@ export function Settings() {
   // ── Provider tile selection ────────────────────────────────────────
   function selectProvider(pid: ProviderId) {
     const preset: ProviderPreset | undefined = providers[pid];
+    const switching = pid !== provider;   // only reset fields when actually changing provider
     setProvider(pid);
-    if (preset?.api_base) setApiBase(preset.api_base);
-    setChatModel(preset?.suggested_chat?.[0] ?? '');
-    setFastModel(preset?.suggested_chat?.[1] ?? preset?.suggested_chat?.[0] ?? '');
-    setEmbedModel(preset?.embed_supported !== false ? (preset?.suggested_embed ?? '') : '');
+    if (switching && preset?.api_base) setApiBase(preset.api_base);
+    if (switching) setChatModel(preset?.suggested_chat?.[0] ?? '');
+    if (switching) setFastModel(preset?.suggested_chat?.[1] ?? preset?.suggested_chat?.[0] ?? '');
+    if (switching) setEmbedModel(preset?.embed_supported !== false ? (preset?.suggested_embed ?? '') : '');
     setAiDirty(true);
     setTestResult(null);
   }
@@ -217,10 +1740,12 @@ export function Settings() {
       api.settings.update({
         'profile.name': profileName.trim(),
         'profile.currency': profileCurrency,
+        'profile.timezone': profileTimezone,
       }),
     onSuccess: () => {
       localStorage.setItem('user_name', profileName.trim());
       localStorage.setItem('sub_display_currency', profileCurrency);
+      localStorage.setItem('user_timezone', profileTimezone);
       setProfileDirty(false);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2500);
@@ -243,6 +1768,7 @@ export function Settings() {
       setAiDirty(false);
       qc.invalidateQueries({ queryKey: ['settings-all'] });
       qc.invalidateQueries({ queryKey: ['settings-models'] });
+      refetchHealth();
     },
   });
 
@@ -264,6 +1790,7 @@ export function Settings() {
     onSuccess: (result) => {
       setTestResult(result);
       setAiDirty(false);
+      refetchHealth();
     },
     onError: (e: Error) => {
       setTestResult({ ok: false, provider, model: chatModel, response: null, error: e.message });
@@ -289,7 +1816,7 @@ export function Settings() {
   if (loadingSettings) {
     return (
       <>
-        <PageHeader title="Settings" subtitle="Profile, preferences, and AI configuration." />
+        <PageHeader title="Settings" eyebrow="SETTINGS" subtitle="Profile, preferences, and AI configuration." />
         <div className="flex items-center justify-center py-20 text-ink-500 text-sm">Loading…</div>
       </>
     );
@@ -297,65 +1824,181 @@ export function Settings() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Profile, preferences, and AI configuration." />
+      <PageHeader title="Settings" eyebrow="SETTINGS" subtitle="Profile, preferences, and AI configuration." />
 
-      <div className="space-y-6 max-w-2xl">
+      {/* Settings grid: left sticky nav + right content */}
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 40, alignItems: 'flex-start' }}>
+
+        {/* ── Left: sticky section nav ─────────────────────────────── */}
+        <nav style={{ position: 'sticky', top: 88, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {([
+            { id: 'profile',       label: 'Profile',       icon: '👤' },
+            { id: 'ai',            label: 'AI Provider',   icon: '🤖' },
+            { id: 'notifications', label: 'Notifications', icon: '🔔' },
+            { id: 'sms',           label: 'SMS Config',    icon: '💬' },
+            { id: 'modules',       label: 'Modules',       icon: '🧩' },
+            { id: 'finance',       label: 'Finance',       icon: '💰' },
+            { id: 'privacy',       label: 'Privacy',       icon: '🔒' },
+          ] as const).map(({ id, label, icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', borderRadius: 10,
+                color: 'var(--fg-3)', fontSize: 13, fontWeight: 500,
+                background: 'none', border: 0, cursor: 'pointer',
+                textAlign: 'left', width: '100%',
+                transition: 'var(--transition)',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-1)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = '';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-3)';
+              }}
+            >
+              <span style={{ fontSize: 14, color: 'var(--fg-4)' }}>{icon}</span>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+      {/* ── Right: content sections ──────────────────────────────── */}
+      <div className="space-y-6">
 
         {/* ── Profile ───────────────────────────────────────────── */}
-        <section className="card">
-          <SectionTitle>Profile</SectionTitle>
+        <section id="sec-profile" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="Profile" desc="How you appear across the app." />
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <Label>Your name</Label>
-              <input
-                className={inputCls}
-                value={profileName}
-                onChange={(e) => { setProfileName(e.target.value); setProfileDirty(true); }}
-                placeholder="e.g. Jeevan"
-                maxLength={60}
-              />
-              <p className="text-[10px] text-ink-700 mt-0.5">Shown in the dashboard greeting.</p>
-            </div>
-
-            <div>
-              <Label>Display currency</Label>
-              <select
-                className={selectCls}
-                value={profileCurrency}
-                onChange={(e) => { setProfileCurrency(e.target.value); setProfileDirty(true); }}
+            {/* Setting rows */}
+            {([
+              {
+                label: 'Display name',
+                desc: 'Shown in headers, greeting and exports.',
+                control: (
+                  <input
+                    className={inputCls}
+                    value={profileName}
+                    onChange={(e) => { setProfileName(e.target.value); setProfileDirty(true); }}
+                    placeholder="e.g. Jeevan"
+                    maxLength={60}
+                    style={{ minWidth: 220 }}
+                  />
+                ),
+              },
+              {
+                label: 'Display currency',
+                desc: 'Used in finance, budgets and subscription totals.',
+                control: (
+                  <select
+                    className={selectCls}
+                    value={profileCurrency}
+                    onChange={(e) => { setProfileCurrency(e.target.value); setProfileDirty(true); }}
+                    style={{ minWidth: 180 }}
+                  >
+                    {CURRENCY_OPTS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                ),
+              },
+            ] as const).map(({ label, desc, control }, i) => (
+              <div
+                key={label}
+                style={{
+                  display: 'grid', gridTemplateColumns: '1fr auto',
+                  gap: 24, alignItems: 'center',
+                  padding: '18px 22px',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)',
+                }}
               >
-                {CURRENCY_OPTS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              <p className="text-[10px] text-ink-700 mt-0.5">Used in subscriptions and dashboard stats.</p>
-            </div>
-          </div>
+                <div>
+                  <div style={{ font: '500 14px/1.3 var(--font-sans)', color: 'var(--fg-1)' }}>{label}</div>
+                  <div style={{ color: 'var(--fg-4)', fontSize: 12.5, marginTop: 4 }}>{desc}</div>
+                </div>
+                <div>{control}</div>
+              </div>
+            ))}
 
-          <div className="flex items-center gap-2">
-            <BtnPrimary
-              onClick={() => profileMut.mutate()}
-              disabled={!profileDirty || profileMut.isPending}
-            >
-              {profileMut.isPending ? 'Saving…' : 'Save profile'}
-            </BtnPrimary>
-            {profileSaved && (
-              <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-                <Check className="w-3 h-3" /> Saved
-              </span>
-            )}
-            {profileMut.isError && (
-              <span className="text-[11px] text-red-400">
-                {(profileMut.error as Error).message}
-              </span>
-            )}
+            {/* Timezone row */}
+            <div style={{ padding: '18px 22px', borderTop: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+                <div>
+                  <div style={{ font: '500 14px/1.3 var(--font-sans)', color: 'var(--fg-1)' }}>Timezone</div>
+                  <div style={{ color: 'var(--fg-4)', fontSize: 12.5, marginTop: 4 }}>Used for streaks, journal anchors and "today" boundaries.</div>
+                </div>
+                <div>
+                  <TimezoneField
+                    value={profileTimezone}
+                    onChange={(tz) => { setProfileTimezone(tz); setProfileDirty(true); }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Save row */}
+            <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <BtnPrimary
+                onClick={() => profileMut.mutate()}
+                disabled={!profileDirty || profileMut.isPending}
+              >
+                {profileMut.isPending ? 'Saving…' : 'Save profile'}
+              </BtnPrimary>
+              {profileSaved && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--accent-green)' }}>
+                  <Check className="w-3 h-3" /> Saved
+                </span>
+              )}
+              {profileMut.isError && (
+                <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>
+                  {(profileMut.error as Error).message}
+                </span>
+              )}
+            </div>
           </div>
         </section>
 
         {/* ── AI Provider ───────────────────────────────────────── */}
-        <section className="card">
-          <SectionTitle>AI Provider</SectionTitle>
+        <section id="sec-ai" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
+            <SectionHead title="AI Provider" desc="Connect a local model or any cloud API — OpenAI, Claude, Gemini, and more." />
+            <div style={{ paddingTop: 6, flexShrink: 0 }}>
+              <ConnectionStatusPill result={healthResult} isLoading={healthLoading} />
+            </div>
+          </div>
+          <div className="card" style={{ padding: 22 }}>
+
+          {/* Unreachable banner */}
+          {healthResult?.ok === false && (
+            <div style={{
+              marginBottom: 16, padding: '10px 14px', borderRadius: 10,
+              background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.22)',
+            }}>
+              <p style={{ margin: '0 0 3px', fontSize: 12.5, fontWeight: 500, color: '#fca5a5' }}>
+                📡 AI server not reachable
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-4)', lineHeight: '18px' }}>
+                {healthResult.error}
+              </p>
+            </div>
+          )}
+
+          {/* Anthropic notice */}
+          {healthResult?.ok === null && healthResult.note && (
+            <div style={{
+              marginBottom: 16, padding: '10px 14px', borderRadius: 10,
+              background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.22)',
+            }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#fde68a' }}>ℹ️ {healthResult.note}</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-4 gap-2 mb-5">
             {PROVIDER_ORDER.map((pid) => {
@@ -367,11 +2010,12 @@ export function Settings() {
                   type="button"
                   onClick={() => selectProvider(pid)}
                   className={cn(
-                    'flex flex-col items-center gap-1 rounded-md border py-3 px-2 text-center transition-all',
+                    'flex flex-col items-center gap-1.5 rounded-xl border py-3 px-2 text-center transition-all',
                     active
-                      ? 'border-accent/60 bg-accent/10'
-                      : 'border-ink-800 bg-ink-950 hover:border-ink-700 hover:bg-ink-900',
+                      ? 'border-accent/50 bg-accent/10'
+                      : 'border-[rgba(255,255,255,0.07)] hover:border-[rgba(255,255,255,0.14)] hover:bg-white/4',
                   )}
+                  style={!active ? { background: 'rgba(255,255,255,0.02)' } : {}}
                 >
                   <span className="text-xl">{p?.emoji ?? '🔧'}</span>
                   <span className={cn(
@@ -435,7 +2079,7 @@ export function Settings() {
                   </button>
                 </div>
                 {apiKey && /^•+$/.test(apiKey) && (
-                  <p className="text-[10px] text-ink-600 mt-0.5">
+                  <p className="text-[10px] text-ink-400 mt-0.5">
                     Key saved — type a new one to replace it.
                   </p>
                 )}
@@ -515,7 +2159,7 @@ export function Settings() {
           )}
 
           {/* AI action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
             <BtnPrimary
               onClick={() => aiSaveMut.mutate()}
               disabled={!aiDirty || aiSaveMut.isPending}
@@ -532,37 +2176,78 @@ export function Settings() {
               }
             </BtnSecondary>
             {aiSaveMut.isSuccess && !aiDirty && (
-              <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--accent-green)' }}>
                 <Check className="w-3 h-3" /> Saved
               </span>
             )}
             {aiSaveMut.isError && (
-              <span className="text-[11px] text-red-400">
+              <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>
                 {(aiSaveMut.error as Error).message}
               </span>
             )}
           </div>
+          </div>{/* end AI card */}
+        </section>
+
+        {/* ── Finance Categories ──────────────────────────────── */}
+        <section id="sec-finance" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="Finance Categories" desc="Manage the categories used to tag your transactions." />
+          <FinanceCategoriesPanel />
+        </section>
+
+        {/* ── SMS Import ────────────────────────────────────────── */}
+        <section id="sec-sms" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="SMS Config" desc="Automatically detect transactions from bank SMS messages." />
+          <SmsSetupPanel />
+        </section>
+
+        {/* ── Modules ───────────────────────────────────────────── */}
+        <section id="sec-modules" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="Modules" desc="Choose which features are active. Dashboard is always on for everyone." />
+          <ModulesPanel />
+        </section>
+
+        {/* ── Notifications ─────────────────────────────────────── */}
+        <section id="sec-notifications" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="Notifications" desc="Gentle nudges, not a fire-hose." />
+          <NotificationSettingsPanel />
         </section>
 
         {/* ── Privacy notes ─────────────────────────────────────── */}
-        <section className="grid grid-cols-2 gap-3">
-          <div className="card">
-            <p className="text-xs font-medium text-ink-300 mb-1">🔒 Privacy</p>
-            <p className="text-[11px] text-ink-600 leading-relaxed">
-              Your API key is stored only in the local encrypted SQLite database on your machine.
-              It is never sent to any third party.
-            </p>
+        <section id="sec-privacy" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="Privacy" desc="Your data stays on your device." />
+
+          {/* App lock */}
+          <div style={{ marginBottom: 20 }}>
+            <AppLockPanel />
           </div>
-          <div className="card">
-            <p className="text-xs font-medium text-ink-300 mb-1">🌐 Local vs Cloud</p>
-            <p className="text-[11px] text-ink-600 leading-relaxed">
-              Cloud providers (OpenAI, Anthropic…) send prompts to their servers.
-              Local (LM Studio, Ollama) runs entirely on your device.
-            </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="card" style={{ padding: 22 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 18 }}>🔒</span>
+                <h4 style={{ margin: 0, font: '500 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>Local encryption</h4>
+              </div>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.6 }}>
+                Your API key is stored only in the local SQLite database on your machine.
+                It is never sent to any third party.
+              </p>
+            </div>
+            <div className="card" style={{ padding: 22 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 18 }}>🌐</span>
+                <h4 style={{ margin: 0, font: '500 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>Local vs Cloud</h4>
+              </div>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.6 }}>
+                Cloud providers (OpenAI, Anthropic…) send prompts to their servers.
+                Local (LM Studio, Ollama) runs entirely on your device.
+              </p>
+            </div>
           </div>
         </section>
 
-      </div>
+      </div>{/* end right content */}
+      </div>{/* end settings-grid */}
     </>
   );
 }

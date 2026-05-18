@@ -1,5 +1,5 @@
 @echo off
-REM Personal OS launcher — Windows.
+REM North OS launcher — Windows.
 setlocal
 
 set ROOT_DIR=%~dp0..
@@ -45,7 +45,7 @@ if not exist backend\.venv (
 )
 
 echo [start] Starting backend on :8000 ...
-start "Personal OS Backend" cmd /k "cd backend && .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+start "North OS Backend" cmd /k "cd backend && .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
 REM ---- Frontend --------------------------------------------------------
 if not exist frontend\node_modules (
@@ -54,7 +54,7 @@ if not exist frontend\node_modules (
 )
 
 echo [start] Starting frontend on :5173 ...
-start "Personal OS Frontend" cmd /k "cd frontend && npm run dev"
+start "North OS Frontend" cmd /k "cd frontend && npm run dev"
 
 timeout /t 3 >nul
 start "" http://127.0.0.1:5173

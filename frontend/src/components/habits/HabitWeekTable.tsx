@@ -255,7 +255,7 @@ export function HabitWeekTable({ habits, weekStart }: Props) {
                         {dayNoteCount}
                       </span>
                     ) : (
-                      <span className="text-ink-700">—</span>
+                      <span className="text-ink-400">—</span>
                     )}
                   </td>
                 </tr>
@@ -349,7 +349,7 @@ function NotePopover({ date, initialNote, x, y, onSave, onClose }: NotePopoverPr
         maxLength={280}
         rows={3}
         placeholder="Add a note…"
-        className="w-full bg-ink-950 border border-ink-800 rounded-md px-2 py-1.5 text-xs text-ink-100 placeholder:text-ink-600 resize-none outline-none focus:border-accent/60"
+        className="w-full bg-ink-950 border border-ink-800 rounded-md px-2 py-1.5 text-xs text-ink-100 placeholder:text-ink-500 resize-none outline-none focus:border-accent/60"
       />
       <div className="flex items-center justify-end gap-1.5">
         <button

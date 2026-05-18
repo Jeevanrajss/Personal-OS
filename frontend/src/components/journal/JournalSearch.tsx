@@ -37,18 +37,24 @@ export function JournalSearch() {
 
       <form onSubmit={submit} className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-600 pointer-events-none" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-400 pointer-events-none" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search your journal by meaning…"
-            className="w-full pl-8 pr-8 py-1.5 bg-ink-900 border border-ink-800 rounded-md text-sm
-                       placeholder:text-ink-600 outline-none focus:border-accent/60"
+            className="w-full pl-8 pr-8 py-1.5 rounded-xl text-sm text-ink-200
+                       placeholder:text-ink-400 outline-none transition-all"
+            style={{
+              background: 'rgba(0,0,0,0.35)',
+              border: '1px solid rgba(255,255,255,0.09)',
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = 'rgba(139,92,246,0.55)')}
+            onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)')}
           />
           {query && (
             <button type="button" onClick={clear}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-600 hover:text-ink-300">
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-300">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -82,7 +88,8 @@ export function JournalSearch() {
             <ul className="space-y-2">
               {results.map((r) => (
                 <li key={r.entry_id}
-                  className="rounded-md border border-ink-800 bg-ink-950 px-3 py-2.5 hover:border-ink-700 transition-colors">
+                  className="rounded-xl px-3 py-2.5 transition-colors"
+                  style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.07)' }}>
                   <div className="flex items-center justify-between mb-1">
                     <Link
                       to="/journal"
@@ -93,7 +100,7 @@ export function JournalSearch() {
                     </Link>
                     <span className={cn(
                       'text-[10px] tabular-nums',
-                      r.score > 0.85 ? 'text-emerald-400' : r.score > 0.7 ? 'text-yellow-400/80' : 'text-ink-600',
+                      r.score > 0.85 ? 'text-emerald-400' : r.score > 0.7 ? 'text-yellow-400/80' : 'text-ink-400',
                     )}>
                       {Math.round(r.score * 100)}% match
                     </span>

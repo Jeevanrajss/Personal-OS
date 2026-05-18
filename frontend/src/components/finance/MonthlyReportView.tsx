@@ -2,12 +2,12 @@
  * Monthly Report View
  * Shows summary cards, category breakdown (bar chart), budget vs actual,
  * filterable transaction table, CSV/PDF export buttons.
+ * Styled entirely with CSS variables to match the app theme.
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileText, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { api, type MonthlyReport, type ReportCategoryStat } from '@/lib/api';
-import { cn } from '@/lib/cn';
 
 const MONTH_NAMES = [
   '', 'January', 'February', 'March', 'April', 'May', 'June',
@@ -24,17 +24,25 @@ function fmt(n: number) {
 // Summary card
 // ---------------------------------------------------------------------------
 function SummaryCard({
-  icon, label, value, sub, color,
+  icon, label, value, sub, valueColor,
 }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; color: string;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  valueColor: string;
 }) {
   return (
-    <div className="card p-4 flex items-center gap-3">
-      <span className="shrink-0">{icon}</span>
+    <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ flexShrink: 0 }}>{icon}</span>
       <div>
-        <div className="text-[10px] uppercase tracking-wide text-ink-500">{label}</div>
-        <div className={cn('text-base font-bold tabular-nums', color)}>{value}</div>
-        {sub && <div className="text-[10px] text-ink-500 mt-0.5">{sub}</div>}
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-4)', marginBottom: 3 }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: valueColor }}>
+          {value}
+        </div>
+        {sub && <div style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
   );
@@ -46,20 +54,27 @@ function SummaryCard({
 function CategoryBar({ stat, maxAmount }: { stat: ReportCategoryStat; maxAmount: number }) {
   const pct = maxAmount > 0 ? Math.min((stat.total / maxAmount) * 100, 100) : 0;
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="w-32 text-xs text-ink-600 dark:text-ink-400 truncate text-right shrink-0">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+      <span style={{ width: 120, color: 'var(--fg-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right', flexShrink: 0 }}>
         {stat.category}
       </span>
-      <div className="flex-1 h-5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div style={{ flex: 1, height: 18, background: 'var(--surface-elev)', borderRadius: 999, overflow: 'hidden' }}>
         <div
-          className="h-full rounded-full bg-violet-500/80 transition-all"
-          style={{ width: `${pct}%` }}
+          style={{
+            height: '100%', borderRadius: 999,
+            background: 'var(--primary-500)',
+            width: `${pct}%`,
+            transition: 'width 400ms ease',
+            opacity: 0.85,
+          }}
         />
       </div>
-      <span className="w-24 text-xs font-medium text-ink-700 dark:text-ink-300 text-right tabular-nums shrink-0">
+      <span style={{ width: 96, fontSize: 11.5, fontWeight: 500, color: 'var(--fg-3)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
         {fmt(stat.total)}
       </span>
-      <span className="w-8 text-[11px] text-ink-400 text-right shrink-0">{stat.count}</span>
+      <span style={{ width: 28, fontSize: 11, color: 'var(--fg-4)', textAlign: 'right', flexShrink: 0 }}>
+        {stat.count}
+      </span>
     </div>
   );
 }
@@ -74,23 +89,43 @@ function BudgetRow({
 }) {
   const over = pct > 100;
   const warn = pct > 80;
+  const barColor = over ? 'var(--accent-red)' : warn ? '#F59E0B' : 'var(--accent-green)';
+  const textColor = over ? 'var(--accent-red)' : warn ? '#F59E0B' : 'var(--fg-3)';
   return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs">
-        <span className="font-medium text-ink-700 dark:text-ink-300">{label}</span>
-        <span className={cn('font-medium', over ? 'text-red-500' : warn ? 'text-amber-500' : 'text-ink-500')}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+        <span style={{ fontWeight: 500, color: 'var(--fg-2)' }}>{label}</span>
+        <span style={{ fontWeight: 500, color: textColor, fontVariantNumeric: 'tabular-nums' }}>
           {fmt(spent)} / {fmt(budget)} ({pct.toFixed(0)}%)
         </span>
       </div>
-      <div className="h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div style={{ height: 6, background: 'var(--surface-elev)', borderRadius: 999, overflow: 'hidden' }}>
         <div
-          className={cn('h-full rounded-full transition-all', over ? 'bg-red-500' : warn ? 'bg-amber-400' : 'bg-emerald-500')}
-          style={{ width: `${Math.min(pct, 100)}%` }}
+          style={{
+            height: '100%', borderRadius: 999,
+            background: barColor,
+            width: `${Math.min(pct, 100)}%`,
+            transition: 'width 400ms ease',
+          }}
         />
       </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Shared select style
+// ---------------------------------------------------------------------------
+const selectStyle: React.CSSProperties = {
+  fontSize: 12,
+  padding: '5px 10px',
+  borderRadius: 8,
+  background: 'var(--surface-elev)',
+  border: '1px solid var(--border-default)',
+  color: 'var(--fg-2)',
+  outline: 'none',
+  cursor: 'pointer',
+};
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -132,7 +167,7 @@ export function MonthlyReportView({ year, month }: Props) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-ink-400 text-sm">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0', color: 'var(--fg-4)', fontSize: 13 }}>
         Loading report…
       </div>
     );
@@ -140,7 +175,7 @@ export function MonthlyReportView({ year, month }: Props) {
 
   if (isError || !report) {
     return (
-      <div className="flex items-center justify-center py-20 text-rose-400 text-sm">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0', color: 'var(--accent-red)', fontSize: 13 }}>
         Failed to load report.
       </div>
     );
@@ -157,78 +192,98 @@ export function MonthlyReportView({ year, month }: Props) {
   const hasBudgets = !!report.budget_overall || report.budget_by_category.length > 0;
 
   return (
-    <div className="space-y-5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
       {/* Header with export buttons */}
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-ink-700 dark:text-ink-200">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ margin: 0, font: '600 16px/1 var(--font-display)', color: 'var(--fg-1)' }}>
           {MONTH_NAMES[month]} {year} Report
         </h2>
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             type="button"
             onClick={() => downloadExport('csv')}
             disabled={exporting !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-600 text-xs font-medium text-ink-600 dark:text-ink-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+              background: 'var(--surface-elev)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--fg-3)', cursor: 'pointer',
+              opacity: exporting ? 0.5 : 1, transition: 'opacity 150ms',
+            }}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <FileText style={{ width: 13, height: 13 }} />
             {exporting === 'csv' ? 'Exporting…' : 'CSV'}
           </button>
           <button
             type="button"
             onClick={() => downloadExport('pdf')}
             disabled={exporting !== null}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-400 bg-violet-50 dark:bg-violet-900/30 dark:border-violet-700 text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+              background: 'rgba(139,124,255,0.12)',
+              border: '1px solid rgba(139,124,255,0.35)',
+              color: 'var(--primary-300)', cursor: 'pointer',
+              opacity: exporting ? 0.5 : 1, transition: 'opacity 150ms',
+            }}
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download style={{ width: 13, height: 13 }} />
             {exporting === 'pdf' ? 'Exporting…' : 'PDF'}
           </button>
         </div>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}
+        className="sm:grid-cols-4">
         <SummaryCard
-          icon={<TrendingUp className="w-4 h-4 text-emerald-500" />}
+          icon={<TrendingUp style={{ width: 16, height: 16, color: 'var(--accent-green)' }} />}
           label="Income"
           value={fmt(report.total_income)}
-          color="text-emerald-500"
+          valueColor="var(--accent-green)"
         />
         <SummaryCard
-          icon={<TrendingDown className="w-4 h-4 text-red-400" />}
+          icon={<TrendingDown style={{ width: 16, height: 16, color: 'var(--accent-red)' }} />}
           label="Expenses"
           value={fmt(report.total_expense)}
-          color="text-red-400"
+          valueColor="var(--accent-red)"
         />
         <SummaryCard
-          icon={<Wallet className="w-4 h-4 text-violet-500" />}
+          icon={<Wallet style={{ width: 16, height: 16, color: 'var(--primary-300)' }} />}
           label="Net Savings"
           value={fmt(report.net)}
-          color={report.net >= 0 ? 'text-emerald-500' : 'text-red-400'}
+          valueColor={report.net >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}
         />
         <SummaryCard
-          icon={<span className="text-lg">📊</span>}
+          icon={<span style={{ fontSize: 16 }}>📊</span>}
           label="Savings Rate"
           value={`${report.savings_rate}%`}
           sub={`${report.transaction_count} transactions`}
-          color={report.savings_rate >= 20 ? 'text-emerald-500' : report.savings_rate >= 0 ? 'text-amber-500' : 'text-red-400'}
+          valueColor={report.savings_rate >= 20 ? 'var(--accent-green)' : report.savings_rate >= 0 ? '#F59E0B' : 'var(--accent-red)'}
         />
       </div>
 
       {/* Two-column: chart + budget */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}
+        className="grid-cols-1 lg:grid-cols-2">
+
         {/* Category breakdown */}
-        <div className="card p-4 space-y-2">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm text-ink-700 dark:text-ink-200">By Category</h3>
-            <div className="flex gap-2 text-[10px] text-ink-400">
+        <div className="card" style={{ padding: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, font: '500 13px/1 var(--font-display)', color: 'var(--fg-1)' }}>
+              By Category
+            </h3>
+            <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--fg-4)', letterSpacing: '0.05em' }}>
               <span>Amount</span>
               <span>Txns</span>
             </div>
           </div>
           {report.by_category.length === 0 ? (
-            <p className="text-xs text-ink-400 py-4 text-center">No expense data</p>
+            <p style={{ fontSize: 12, color: 'var(--fg-4)', padding: '16px 0', textAlign: 'center' }}>No expense data</p>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {report.by_category.map((cs) => (
                 <CategoryBar key={cs.category} stat={cs} maxAmount={maxCatAmount} />
               ))}
@@ -237,18 +292,18 @@ export function MonthlyReportView({ year, month }: Props) {
         </div>
 
         {/* Budget vs actual */}
-        <div className="card p-4">
-          <h3 className="font-semibold text-sm text-ink-700 dark:text-ink-200 mb-3">
+        <div className="card" style={{ padding: 18 }}>
+          <h3 style={{ margin: '0 0 14px', font: '500 13px/1 var(--font-display)', color: 'var(--fg-1)' }}>
             Budget vs Actual
           </h3>
           {!hasBudgets ? (
-            <div className="flex flex-col items-center justify-center py-8 text-ink-400 text-xs gap-2">
-              <span className="text-2xl">📋</span>
-              No budgets set for this month.
-              <span>Go to the Budgets tab to set limits.</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', color: 'var(--fg-4)', fontSize: 12, gap: 8 }}>
+              <span style={{ fontSize: 24 }}>📋</span>
+              <span>No budgets set for this month.</span>
+              <span style={{ color: 'var(--fg-4)' }}>Go to the Budgets tab to set limits.</span>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {report.budget_overall && (
                 <BudgetRow
                   label="Overall"
@@ -272,26 +327,20 @@ export function MonthlyReportView({ year, month }: Props) {
       </div>
 
       {/* Transaction list */}
-      <div className="card p-4">
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <h3 className="font-semibold text-sm text-ink-700 dark:text-ink-200 shrink-0">
+      <div className="card" style={{ padding: 18 }}>
+
+        {/* Filters header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, font: '500 13px/1 var(--font-display)', color: 'var(--fg-1)', flexShrink: 0 }}>
             Transactions
           </h3>
-          <div className="flex gap-2 ml-auto flex-wrap">
-            <select
-              className="text-xs border border-zinc-200 dark:border-zinc-600 rounded-lg px-2 py-1.5 bg-white dark:bg-zinc-800"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-            >
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+            <select style={selectStyle} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}>
               <option value="all">All types</option>
               <option value="expense">Expenses only</option>
               <option value="income">Income only</option>
             </select>
-            <select
-              className="text-xs border border-zinc-200 dark:border-zinc-600 rounded-lg px-2 py-1.5 bg-white dark:bg-zinc-800"
-              value={catFilter}
-              onChange={(e) => setCatFilter(e.target.value)}
-            >
+            <select style={selectStyle} value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
               <option value="">All categories</option>
               {categories.map((c) => <option key={c!} value={c!}>{c}</option>)}
             </select>
@@ -299,36 +348,71 @@ export function MonthlyReportView({ year, month }: Props) {
         </div>
 
         {filteredTxns.length === 0 ? (
-          <p className="text-xs text-ink-400 py-6 text-center">No transactions match the filter.</p>
+          <p style={{ fontSize: 12, color: 'var(--fg-4)', padding: '24px 0', textAlign: 'center' }}>
+            No transactions match the filter.
+          </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-zinc-100 dark:border-zinc-800 text-ink-400">
-                  <th className="text-left py-2 pr-3 font-medium">Date</th>
-                  <th className="text-left py-2 pr-3 font-medium">Description</th>
-                  <th className="text-left py-2 pr-3 font-medium">Category</th>
-                  <th className="text-left py-2 pr-3 font-medium">Account</th>
-                  <th className="text-right py-2 font-medium">Amount</th>
+                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
+                  {['Date', 'Description', 'Category', 'Account', 'Amount'].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: '6px 10px 8px',
+                        textAlign: h === 'Amount' ? 'right' : 'left',
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: 'var(--fg-4)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
+              <tbody>
                 {filteredTxns.map((t) => (
-                  <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
-                    <td className="py-1.5 pr-3 font-mono text-ink-500 whitespace-nowrap">{t.date}</td>
-                    <td className="py-1.5 pr-3 text-ink-700 dark:text-ink-300 max-w-[200px] truncate">
+                  <tr
+                    key={t.id}
+                    style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 120ms' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = 'var(--surface-hover)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = ''; }}
+                  >
+                    <td style={{ padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--fg-4)', whiteSpace: 'nowrap' }}>
+                      {t.date}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: 'var(--fg-3)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {t.payee || t.notes || '—'}
                     </td>
-                    <td className="py-1.5 pr-3">
-                      <span className="px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-ink-600 dark:text-ink-400">
-                        {t.category || '—'}
-                      </span>
+                    <td style={{ padding: '8px 10px' }}>
+                      {t.category ? (
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '2px 8px', borderRadius: 999,
+                          background: 'var(--surface-elev)',
+                          border: '1px solid var(--border-default)',
+                          color: 'var(--fg-3)', fontSize: 11,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {t.category}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--fg-4)' }}>—</span>
+                      )}
                     </td>
-                    <td className="py-1.5 pr-3 text-ink-500">{t.account || '—'}</td>
-                    <td className={cn(
-                      'py-1.5 text-right font-medium tabular-nums',
-                      t.type === 'income' ? 'text-emerald-600' : 'text-ink-700 dark:text-ink-300',
-                    )}>
+                    <td style={{ padding: '8px 10px', color: 'var(--fg-4)', whiteSpace: 'nowrap' }}>
+                      {t.account || '—'}
+                    </td>
+                    <td style={{
+                      padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)',
+                      fontWeight: 500, whiteSpace: 'nowrap',
+                      color: t.type === 'income' ? 'var(--accent-green)' : 'var(--fg-2)',
+                    }}>
                       {t.type === 'income' ? '+' : '−'}₹{t.amount.toLocaleString('en-IN')}
                     </td>
                   </tr>

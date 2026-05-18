@@ -42,10 +42,36 @@ SEED_TAGS: list[str] = [
 ]
 
 
+SEED_FINANCE_CATEGORIES = [
+    # Expense
+    {"name": "Food & Dining",  "emoji": "🍽️", "type": "expense", "is_system": True, "sort_order": 10},
+    {"name": "Transport",      "emoji": "🚗",  "type": "expense", "is_system": True, "sort_order": 20},
+    {"name": "Shopping",       "emoji": "🛒",  "type": "expense", "is_system": True, "sort_order": 30},
+    {"name": "Healthcare",     "emoji": "🏥",  "type": "expense", "is_system": True, "sort_order": 40},
+    {"name": "Entertainment",  "emoji": "🎬",  "type": "expense", "is_system": True, "sort_order": 50},
+    {"name": "Housing",        "emoji": "🏠",  "type": "expense", "is_system": True, "sort_order": 60},
+    {"name": "Utilities",      "emoji": "💡",  "type": "expense", "is_system": True, "sort_order": 70},
+    {"name": "Education",      "emoji": "📚",  "type": "expense", "is_system": True, "sort_order": 80},
+    {"name": "Fitness",        "emoji": "💪",  "type": "expense", "is_system": True, "sort_order": 90},
+    {"name": "Travel",         "emoji": "✈️",  "type": "expense", "is_system": True, "sort_order": 100},
+    {"name": "Subscriptions",  "emoji": "💳",  "type": "expense", "is_system": True, "sort_order": 110},
+    {"name": "Other",          "emoji": "💸",  "type": "expense", "is_system": True, "sort_order": 990},
+    # Both (expense + income)
+    {"name": "Splits",         "emoji": "🤝",  "type": "both",    "is_system": True, "sort_order": 120},
+    # Income
+    {"name": "Salary",         "emoji": "💼",  "type": "income",  "is_system": True, "sort_order": 200},
+    {"name": "Freelance",      "emoji": "💰",  "type": "income",  "is_system": True, "sort_order": 210},
+    {"name": "Investment",     "emoji": "📈",  "type": "income",  "is_system": True, "sort_order": 220},
+    {"name": "Gift",           "emoji": "🎁",  "type": "income",  "is_system": True, "sort_order": 230},
+    {"name": "Other Income",   "emoji": "💵",  "type": "income",  "is_system": True, "sort_order": 999},
+]
+
+
 def seed_all(db: Session) -> None:
     """Idempotent seed — only inserts missing rows."""
     _seed_moods(db)
     _seed_tags(db)
+    _seed_finance_categories(db)
     db.commit()
 
 
@@ -61,6 +87,14 @@ def _seed_tags(db: Session) -> None:
     for name in SEED_TAGS:
         if name not in existing:
             db.add(Tag(name=name, seeded=True))
+
+
+def _seed_finance_categories(db: Session) -> None:
+    from app.models.finance_category import FinanceCategory
+    existing = {c.name for c in db.query(FinanceCategory).all()}
+    for cat in SEED_FINANCE_CATEGORIES:
+        if cat["name"] not in existing:
+            db.add(FinanceCategory(**cat))
 
 
 def mood_valence_map(db: Session) -> dict[str, int]:

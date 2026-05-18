@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
+import { Topbar } from '@/components/Topbar';
 import { FloatingChat } from '@/components/FloatingChat';
+import { LockScreen, getLockHash } from '@/components/LockScreen';
 import { Landing } from '@/routes/Landing';
 import { Dashboard } from '@/routes/Dashboard';
 import { Journal } from '@/routes/Journal';
@@ -11,11 +13,24 @@ import { Habits } from '@/routes/Habits';
 import { HabitDetail } from '@/routes/HabitDetail';
 import { Settings } from '@/routes/Settings';
 import { Chat } from '@/routes/Chat';
+import { BriefingProvider } from '@/contexts/BriefingContext';
+import { AIContentProvider } from '@/contexts/AIContentContext';
+import { ModulesProvider, useModules } from '@/contexts/ModulesContext';
+import type { ModuleId } from '@/lib/modules';
+
+/** Redirects to dashboard if the given module is disabled. */
+function ModuleGuard({ moduleId, children }: { moduleId: ModuleId; children: React.ReactNode }) {
+  const { isEnabled } = useModules();
+  if (!isEnabled(moduleId)) return <Navigate to="/app" replace />;
+  return <>{children}</>;
+}
 
 function AppShell() {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('sidebar_collapsed') === 'true';
   });
+  const { pathname } = useLocation();
+  const isJournal = pathname.endsWith('/journal');
 
   function toggleSidebar() {
     setCollapsed((prev) => {
@@ -28,19 +43,26 @@ function AppShell() {
     <div className="flex h-full">
       <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
       <main className="flex-1 overflow-hidden min-w-0 flex flex-col">
+        {!isJournal && <Topbar />}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-8 py-8 h-full">
+          {isJournal ? (
+            /* Journal gets full-bleed layout — it renders its own topbar & padding */
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/journal" element={<Journal />} />
-              <Route path="/finance" element={<Finance />} />
-              <Route path="/subscriptions" element={<Subscriptions />} />
-              <Route path="/habits" element={<Habits />} />
-              <Route path="/habits/:id" element={<HabitDetail />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/chat" element={<Chat />} />
+              <Route path="/journal" element={<ModuleGuard moduleId="journal"><Journal /></ModuleGuard>} />
             </Routes>
-          </div>
+          ) : (
+            <div className="max-w-[1240px] mx-auto px-12 pt-9 pb-24 h-full">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/finance" element={<ModuleGuard moduleId="finance"><Finance /></ModuleGuard>} />
+                <Route path="/subscriptions" element={<ModuleGuard moduleId="subscriptions"><Subscriptions /></ModuleGuard>} />
+                <Route path="/habits" element={<ModuleGuard moduleId="habits"><Habits /></ModuleGuard>} />
+                <Route path="/habits/:id" element={<ModuleGuard moduleId="habits"><HabitDetail /></ModuleGuard>} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/chat" element={<ModuleGuard moduleId="chat"><Chat /></ModuleGuard>} />
+              </Routes>
+            </div>
+          )}
         </div>
       </main>
       <FloatingChat />
@@ -54,6 +76,13 @@ const SHOW_LANDING = import.meta.env.VITE_LANDING_PAGE === 'true';
 
 export default function App() {
   const location = useLocation();
+  // Session-scoped unlock state — re-locks on page refresh
+  const [unlocked, setUnlocked] = useState(false);
+
+  // If a lock is configured and the session isn't unlocked yet, gate everything
+  if (getLockHash() && !unlocked) {
+    return <LockScreen onUnlock={() => setUnlocked(true)} />;
+  }
 
   // Root "/" — landing on Netlify, straight to app locally
   if (location.pathname === '/') {
@@ -66,9 +95,15 @@ export default function App() {
   // App shell wraps /app/* routes
   if (location.pathname.startsWith('/app')) {
     return (
-      <Routes>
-        <Route path="/app/*" element={<AppShell />} />
-      </Routes>
+      <AIContentProvider>
+        <BriefingProvider>
+          <ModulesProvider>
+            <Routes>
+              <Route path="/app/*" element={<AppShell />} />
+            </Routes>
+          </ModulesProvider>
+        </BriefingProvider>
+      </AIContentProvider>
     );
   }
 

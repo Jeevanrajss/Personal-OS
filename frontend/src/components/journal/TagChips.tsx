@@ -63,16 +63,27 @@ export function TagChips({ tags, onChange, placeholder, disabled }: Props) {
     <div>
       <div
         className={cn(
-          'flex flex-wrap items-center gap-1.5 rounded-md border border-ink-800 bg-ink-950 px-2 py-1.5 min-h-[38px]',
-          'focus-within:border-accent/60',
+          'flex flex-wrap items-center gap-1.5 rounded-xl px-2 py-1.5 min-h-[38px] transition-all',
+          'focus-within:ring-1 focus-within:ring-accent/40',
           disabled && 'opacity-50 cursor-not-allowed',
         )}
+        style={{ background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.09)' }}
         onClick={() => inputRef.current?.focus()}
       >
         {tags.map((t) => (
           <span
             key={t}
-            className="inline-flex items-center gap-1 rounded-full bg-accent/15 border border-accent/30 px-2 py-0.5 text-xs text-accent"
+            className="inline-flex items-center gap-1"
+            style={{
+              height: 24, padding: '0 10px',
+              borderRadius: 999,
+              background: 'rgba(184,165,255,0.10)',
+              border: '1px solid rgba(184,165,255,0.18)',
+              color: '#B8A5FF',
+              fontFamily: 'JetBrains Mono, Menlo, monospace',
+              fontSize: '11.5px',
+              fontWeight: 500,
+            }}
           >
             {t}
             {!disabled && (
@@ -82,8 +93,9 @@ export function TagChips({ tags, onChange, placeholder, disabled }: Props) {
                   e.stopPropagation();
                   removeTag(t);
                 }}
-                className="hover:text-ink-50"
+                className="hover:text-white ml-0.5"
                 aria-label={`Remove ${t}`}
+                style={{ color: 'rgba(184,165,255,0.60)' }}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -96,18 +108,36 @@ export function TagChips({ tags, onChange, placeholder, disabled }: Props) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKey}
           disabled={disabled}
-          className="flex-1 min-w-[8ch] bg-transparent text-sm outline-none placeholder:text-ink-600"
+          className="flex-1 min-w-[8ch] bg-transparent text-sm outline-none placeholder:text-ink-500"
+          style={{ color: 'white' }}
           placeholder={tags.length === 0 ? placeholder ?? 'Add tags…' : ''}
         />
       </div>
       {suggestions.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-1">
+        <div className="mt-1.5 flex flex-wrap gap-1">
           {suggestions.map((s) => (
             <button
               key={s.name}
               type="button"
               onClick={() => addTag(s.name)}
-              className="inline-flex items-center gap-1 rounded-full border border-ink-800 bg-ink-900 px-2 py-0.5 text-xs text-ink-400 hover:border-accent/40 hover:text-accent"
+              className="inline-flex items-center gap-1 transition-colors"
+              style={{
+                height: 22, padding: '0 9px',
+                borderRadius: 999,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: '#7B8498',
+                fontFamily: 'JetBrains Mono, Menlo, monospace',
+                fontSize: '11px',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(184,165,255,0.30)';
+                (e.currentTarget as HTMLButtonElement).style.color = '#B8A5FF';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)';
+                (e.currentTarget as HTMLButtonElement).style.color = '#7B8498';
+              }}
             >
               <Plus className="w-3 h-3" /> {s.name}
             </button>

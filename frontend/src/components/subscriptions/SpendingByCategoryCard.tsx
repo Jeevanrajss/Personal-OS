@@ -113,7 +113,7 @@ export function SpendingByCategoryCard({ displayCurrency }: Props) {
       </div>
 
       {categories.length === 1 && categories[0].name === 'Uncategorized' && (
-        <p className="mt-3 text-[10px] text-ink-600 text-center">
+        <p className="mt-3 text-[10px] text-ink-400 text-center">
           Add categories to subscriptions to see a breakdown.
         </p>
       )}

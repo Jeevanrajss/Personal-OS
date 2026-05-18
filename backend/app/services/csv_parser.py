@@ -8,6 +8,7 @@ Returned rows are normalised to:
 """
 from __future__ import annotations
 
+import csv as _csv
 import io
 import re
 from dataclasses import dataclass
@@ -33,6 +34,8 @@ class BankFormat:
     signature: list[str]
     # How many header rows to skip (some banks put metadata above)
     skip_rows: int = 0
+    # Credit-card mode: single amount column where "Cr" suffix = income (payment)
+    cc_format: bool = False
 
 
 BANK_FORMATS: dict[str, BankFormat] = {
@@ -46,6 +49,19 @@ BANK_FORMATS: dict[str, BankFormat] = {
         balance_col="Closing Balance",
         date_formats=["%d/%m/%y", "%d/%m/%Y", "%d-%m-%Y"],
         signature=["Narration", "Debit Amount", "Credit Amount", "Closing Balance"],
+    ),
+    # HDFC NetBanking export uses "Withdrawal Amt." / "Deposit Amt." instead of
+    # "Debit Amount" / "Credit Amount" — same bank, different download path.
+    "hdfc_alt": BankFormat(
+        name="HDFC Bank",
+        date_col="Date",
+        description_col="Narration",
+        debit_col="Withdrawal Amt.",
+        credit_col="Deposit Amt.",
+        amount_col=None,
+        balance_col="Closing Balance",
+        date_formats=["%d/%m/%y", "%d/%m/%Y", "%d-%m-%Y"],
+        signature=["Narration", "Withdrawal Amt.", "Deposit Amt.", "Closing Balance"],
     ),
     "icici": BankFormat(
         name="ICICI Bank",
@@ -135,6 +151,83 @@ BANK_FORMATS: dict[str, BankFormat] = {
         date_formats=["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"],
         signature=["Date", "Description", "Amount"],
     ),
+
+    # ── Credit Card formats ──────────────────────────────────────────────────
+    # In CC statements a single "Amount" column is used.
+    # Rows with a "Cr" suffix are payments (income); everything else is expense.
+
+    "hdfc_cc": BankFormat(
+        name="HDFC Credit Card",
+        date_col="Date",
+        description_col="Narration",
+        debit_col=None,
+        credit_col=None,
+        amount_col="Amount",
+        balance_col=None,
+        date_formats=["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y"],
+        signature=["Date", "Narration", "Amount"],
+        cc_format=True,
+    ),
+    "icici_cc": BankFormat(
+        name="ICICI Credit Card",
+        date_col="Transaction Date",
+        description_col="Transaction Description",
+        debit_col=None,
+        credit_col=None,
+        amount_col="Amount (INR)",
+        balance_col=None,
+        date_formats=["%d/%m/%Y", "%d-%m-%Y"],
+        signature=["Transaction Date", "Transaction Description", "Amount (INR)"],
+        cc_format=True,
+    ),
+    "axis_cc": BankFormat(
+        name="Axis Credit Card",
+        date_col="Tran Date",
+        description_col="Transaction Details",
+        debit_col=None,
+        credit_col=None,
+        amount_col="Amount (INR)",
+        balance_col=None,
+        date_formats=["%d-%m-%Y", "%d/%m/%Y", "%d %b %Y"],
+        signature=["Tran Date", "Transaction Details", "Amount (INR)"],
+        cc_format=True,
+    ),
+    "sbi_cc": BankFormat(
+        name="SBI Credit Card",
+        date_col="Txn Date",
+        description_col="Transaction",
+        debit_col=None,
+        credit_col=None,
+        amount_col="Amount",
+        balance_col=None,
+        date_formats=["%d/%m/%Y", "%d-%m-%Y", "%d %b %Y"],
+        signature=["Txn Date", "Transaction", "Amount"],
+        cc_format=True,
+    ),
+    "kotak_cc": BankFormat(
+        name="Kotak Credit Card",
+        date_col="Transaction Date",
+        description_col="Description",
+        debit_col=None,
+        credit_col=None,
+        amount_col="Amount (INR)",
+        balance_col=None,
+        date_formats=["%d-%m-%Y", "%d/%m/%Y"],
+        signature=["Transaction Date", "Description", "Amount (INR)"],
+        cc_format=True,
+    ),
+    "amex_cc": BankFormat(
+        name="American Express",
+        date_col="Date",
+        description_col="Description",
+        debit_col=None,
+        credit_col=None,
+        amount_col="Amount",
+        balance_col=None,
+        date_formats=["%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"],
+        signature=["Date", "Description", "Amount", "Reference"],
+        cc_format=True,
+    ),
 }
 
 
@@ -158,10 +251,13 @@ def detect_bank(columns: list[str]) -> str | None:
 # Amount parsing helpers
 # ---------------------------------------------------------------------------
 def _clean_amount(val: Any) -> float:
-    """Parse amount strings like '1,23,456.78' or '(500.00)' → float."""
+    """Parse amount strings like '1,23,456.78', '(500.00)', '450 Cr', '450 Dr' → float."""
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return 0.0
-    s = str(val).strip().replace(",", "").replace(" ", "")
+    s = str(val).strip()
+    # Strip trailing Cr / Dr / CR / DR labels (credit-card statement notation)
+    s = re.sub(r"\s*(Cr|Dr|CR|DR)\s*$", "", s, flags=re.IGNORECASE)
+    s = s.replace(",", "").replace(" ", "")
     # Handle parenthesis as negative: (500) → -500
     if s.startswith("(") and s.endswith(")"):
         s = "-" + s[1:-1]
@@ -169,6 +265,12 @@ def _clean_amount(val: Any) -> float:
         return float(s)
     except ValueError:
         return 0.0
+
+
+def _cc_tx_type(val: Any) -> str:
+    """For credit-card statements: 'Cr' suffix = income (payment to card), else expense."""
+    s = str(val).strip()
+    return "income" if re.search(r"\bCr\b", s, re.IGNORECASE) else "expense"
 
 
 def _parse_date(val: Any, formats: list[str]) -> str | None:
@@ -206,6 +308,65 @@ class ParsedRow:
 
 
 # ---------------------------------------------------------------------------
+# Header-row finder
+# ---------------------------------------------------------------------------
+def _find_header_row(content: bytes, max_scan: int = 30) -> int:
+    """Scan the first max_scan rows to find the row that contains actual column headers.
+
+    Strategy:
+      1. For each candidate row, parse it as CSV and collect cell values.
+      2. First pass — check against every known bank signature; return immediately on match.
+      3. Second pass — fall back to the row with the most header-like cells (non-empty,
+         contains at least one letter, short enough to be a label, not "Unnamed:…").
+
+    Returns the 0-based row index to pass as ``header=`` to pandas.
+    """
+    try:
+        text = content.decode("utf-8-sig", errors="replace")
+    except Exception:
+        text = content.decode("latin-1", errors="replace")
+
+    lines = text.splitlines()
+
+    def _row_cells(line: str) -> list[str]:
+        try:
+            return [c.strip().strip('"').strip("'") for c in next(_csv.reader([line]))]
+        except Exception:
+            return [c.strip() for c in line.split(",")]
+
+    # --- Pass 1: known bank signature match ---
+    for i, line in enumerate(lines[:max_scan]):
+        if not line.strip():
+            continue
+        cols_set = set(_row_cells(line))
+        for fmt in BANK_FORMATS.values():
+            score = sum(1 for s in fmt.signature if s in cols_set)
+            if score >= max(2, len(fmt.signature) - 1):
+                return i
+
+    # --- Pass 2: best header-like row (helps unknown / future banks) ---
+    # A header cell: non-empty, has at least one letter (excludes "****" separators),
+    # short enough to be a label (< 40 chars), no "Unnamed:" pandas artefacts.
+    best_row, best_score = 0, 0
+    for i, line in enumerate(lines[:max_scan]):
+        if not line.strip():
+            continue
+        cells = _row_cells(line)
+        score = sum(
+            1 for c in cells
+            if c
+            and any(ch.isalpha() for ch in c)   # must contain a letter
+            and not c.startswith("Unnamed")
+            and len(c) < 40                      # short label, not a prose sentence
+        )
+        if score > best_score:
+            best_score = score
+            best_row = i
+
+    return best_row
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 def parse_csv(
@@ -228,11 +389,15 @@ def parse_csv(
         detected_bank_key: the bank key used (None if manual mapping)
         all_columns: original column names (for frontend mapper)
     """
-    # Try to read CSV, handling common encoding issues
+    # Find the actual header row — many banks export metadata rows above the real headers.
+    # e.g. HDFC CSV starts with "HDFC BANK Ltd. Page No.: 1 Statement of accounts"
+    header_row = _find_header_row(content)
+
+    # Read the CSV starting from the detected header row
     try:
-        df = pd.read_csv(io.BytesIO(content), dtype=str, encoding="utf-8-sig")
+        df = pd.read_csv(io.BytesIO(content), dtype=str, encoding="utf-8-sig", header=header_row)
     except Exception:
-        df = pd.read_csv(io.BytesIO(content), dtype=str, encoding="latin-1")
+        df = pd.read_csv(io.BytesIO(content), dtype=str, encoding="latin-1", header=header_row)
 
     # Strip whitespace from column names
     df.columns = [str(c).strip() for c in df.columns]
@@ -284,13 +449,16 @@ def parse_csv(
             else:
                 continue  # skip zero-value rows
         elif amount_col:
-            raw = _clean_amount(row.get(amount_col))
-            if raw < 0:
-                amount, tx_type = abs(raw), "expense"
-            elif raw > 0:
-                amount, tx_type = raw, "income"
-            else:
+            raw_val = row.get(amount_col)
+            raw = _clean_amount(raw_val)
+            if raw == 0:
                 continue
+            amount = abs(raw)
+            if fmt and fmt.cc_format:
+                # Credit-card: use Cr/Dr suffix to determine type; negative = expense
+                tx_type = _cc_tx_type(raw_val) if raw >= 0 else "expense"
+            else:
+                tx_type = "income" if raw > 0 else "expense"
         else:
             continue
 

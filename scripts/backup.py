@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "data" / "personal-os.db"
+SRC = ROOT / "data" / "north-os.db"
 DST_DIR = ROOT / "data" / "backups"
 
 

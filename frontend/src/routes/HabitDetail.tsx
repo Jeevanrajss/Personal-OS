@@ -37,12 +37,12 @@ export function HabitDetail() {
 
   return (
     <>
-      <div className="mb-4">
+      <div className="mb-6">
         <Link
-          to="/habits"
-          className="inline-flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-100"
+          to="/app/habits"
+          className="inline-flex items-center gap-1.5 text-[11px] text-ink-500 hover:text-ink-200 transition-colors"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Habits
+          <ArrowLeft className="w-3.5 h-3.5" /> Habits
         </Link>
       </div>
 
@@ -78,11 +78,19 @@ function DetailBody({
   return (
     <>
       {/* Hero */}
-      <header className="flex items-start justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <span className="text-4xl leading-none">{habit.emoji}</span>
+      <header className="flex items-start justify-between mb-7">
+        <div className="flex items-center gap-4">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0"
+            style={{ background: 'rgba(139,124,255,0.10)', border: '1px solid rgba(139,124,255,0.20)' }}
+          >
+            {habit.emoji}
+          </div>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-50">
+            <h1
+              className="text-[28px] font-semibold leading-tight tracking-tight text-ink-50"
+              style={{ fontFamily: '"Clash Grotesk", Inter, system-ui, sans-serif' }}
+            >
               {habit.name}
             </h1>
             <p className="text-xs text-ink-500 mt-1">
@@ -153,13 +161,13 @@ function StatCard({
 }) {
   return (
     <div className="card">
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-ink-500">
+      <div className="card-title !mb-2 flex items-center gap-1.5">
         {icon}
         {label}
       </div>
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold text-ink-50 tabular-nums">{value}</span>
-        {unit && <span className="text-xs text-ink-500">{unit}</span>}
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-3xl font-bold text-ink-50 tabular-nums leading-none">{value}</span>
+        {unit && <span className="text-xs text-ink-400">{unit}</span>}
       </div>
     </div>
   );
@@ -174,17 +182,22 @@ function WindowToggle({
 }) {
   const opts: Window[] = [30, 90, 365];
   return (
-    <div className="inline-flex rounded-md border border-ink-800 overflow-hidden text-xs">
-      {opts.map((w, i) => (
+    <div
+      className="flex items-center gap-0.5 p-0.5 rounded-xl"
+      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+    >
+      {opts.map((w) => (
         <button
           key={w}
           type="button"
           onClick={() => onChange(w)}
           className={cn(
-            'px-3 py-1.5',
-            i > 0 && 'border-l border-ink-800',
-            value === w ? 'bg-accent/15 text-accent' : 'bg-ink-900 text-ink-400 hover:text-ink-200',
+            'px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all',
+            value === w
+              ? 'text-ink-100'
+              : 'text-ink-500 hover:text-ink-300',
           )}
+          style={value === w ? { background: 'rgba(255,255,255,0.08)' } : {}}
         >
           {w}d
         </button>

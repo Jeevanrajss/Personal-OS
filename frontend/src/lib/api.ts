@@ -100,9 +100,43 @@ export type FinanceMeta = {
   category_emoji: Record<string, string>;
 };
 
+export type FinanceCategoryType = 'expense' | 'income' | 'both';
+
+export type FinanceCategoryOut = {
+  id: string;
+  name: string;
+  emoji: string;
+  type: FinanceCategoryType;
+  is_system: boolean;
+  sort_order: number;
+};
+
+export type FinanceCategoryIn = {
+  name: string;
+  emoji: string;
+  type: FinanceCategoryType;
+};
+
 // ---------------------------------------------------------------------------
 // Account types
 // ---------------------------------------------------------------------------
+export type SmsTransactionOut = {
+  id: string;
+  source: 'android' | 'imessage';
+  sender: string | null;
+  raw_body: string;
+  received_at: string;
+  parsed_ok: boolean;
+  txn_type: 'income' | 'expense' | null;
+  amount: number | null;
+  currency: string | null;
+  payee: string | null;
+  account: string | null;
+  balance: number | null;
+  txn_date: string | null;
+  status: 'pending' | 'confirmed' | 'dismissed';
+};
+
 export type AccountType = 'savings' | 'credit_card' | 'debit_card' | 'wallet' | 'upi' | 'cash';
 
 export type Account = {
@@ -614,6 +648,19 @@ export type MonthlyReport = {
 };
 
 // ---------------------------------------------------------------------------
+// Notification types
+// ---------------------------------------------------------------------------
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  read: boolean;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // API surface
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -638,6 +685,15 @@ export type LLMTestResult = {
   error: string | null;
 };
 
+export type LLMHealthResult = {
+  ok: boolean | null;   // null = not applicable (Anthropic)
+  provider: string;
+  host: string;
+  models: string[];
+  error: string | null;
+  note: string | null;
+};
+
 export const api = {
   settings: {
     getAll: () => request<Record<string, string>>('/settings'),
@@ -645,6 +701,7 @@ export const api = {
     update: (settings: Record<string, string>) =>
       request<{ ok: boolean }>('/settings', { method: 'PUT', body: JSON.stringify({ settings }) }),
     testLLM: () => request<LLMTestResult>('/settings/test-llm', { method: 'POST' }),
+    llmHealth: () => request<LLMHealthResult>('/settings/health'),
     listModels: () => request<{ models: string[]; error?: string }>('/settings/models'),
   },
 
@@ -814,6 +871,21 @@ export const api = {
       request<MonthlyReport>(`/finance/report/${year}/${month}`),
     reportExportUrl: (year: number, month: number, format: 'csv' | 'pdf') =>
       `/api/v1/finance/report/${year}/${month}/export?format=${format}`,
+
+    // --- Categories ---
+    listCategories: () => request<FinanceCategoryOut[]>('/finance/categories'),
+    createCategory: (payload: FinanceCategoryIn) =>
+      request<FinanceCategoryOut>('/finance/categories', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    updateCategory: (id: string, patch: Partial<FinanceCategoryIn>) =>
+      request<FinanceCategoryOut>(`/finance/categories/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    deleteCategory: (id: string) =>
+      request<void>(`/finance/categories/${id}`, { method: 'DELETE' }),
   },
 
   accounts: {
@@ -836,6 +908,35 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+  },
+
+  sms: {
+    status: () => request<{
+      imessage_available: boolean;
+      android_webhook_url: string;
+      imessage_db_path: string;
+      httpsms_configured: boolean;
+      httpsms_last_sync: string | null;
+    }>('/sms/status'),
+    pending: () => request<SmsTransactionOut[]>('/sms/pending'),
+    scanImessage: (daysBack = 7) => request<{ scanned: boolean; new_transactions: number }>(`/sms/scan-imessage?days_back=${daysBack}`, { method: 'POST' }),
+    syncHttpSms: () => request<{ synced: boolean; new_transactions: number; synced_at: string }>('/sms/sync-httpsms', { method: 'POST' }),
+    debug: () => request<Record<string, unknown>>('/sms/debug'),
+    confirm: (id: string, category?: string | null) => request<{ status: string; transaction: Transaction }>(`/sms/pending/${id}/confirm`, { method: 'POST', body: JSON.stringify({ category: category ?? null }), headers: { 'Content-Type': 'application/json' } }),
+    dismiss: (id: string) => request<{ status: string }>(`/sms/pending/${id}/dismiss`, { method: 'POST' }),
+  },
+
+  notifications: {
+    unreadCount: () => request<{ count: number }>('/notifications/unread-count'),
+    list: () => request<NotificationItem[]>('/notifications/'),
+    markRead: (id: string) => request<{ ok: boolean }>(`/notifications/${id}/read`, { method: 'POST' }),
+    markAllRead: () => request<{ ok: boolean }>('/notifications/read-all', { method: 'POST' }),
+    delete: (id: string) => request<{ ok: boolean }>(`/notifications/${id}`, { method: 'DELETE' }),
+    clearRead: () => request<{ ok: boolean }>('/notifications/clear-read', { method: 'DELETE' }),
+    triggerHabitCheck: () => request<{ created: number }>('/notifications/trigger/habit-check', { method: 'POST' }),
+    triggerSubCheck: () => request<{ created: number }>('/notifications/trigger/sub-check', { method: 'POST' }),
+    triggerMorningBriefing: () => request<{ created: number }>('/notifications/trigger/morning-briefing', { method: 'POST' }),
+    triggerBudgetCheck: () => request<{ created: number }>('/notifications/trigger/budget-check', { method: 'POST' }),
   },
 
   subscriptions: {

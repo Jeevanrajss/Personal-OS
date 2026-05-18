@@ -84,7 +84,7 @@ function Bubble({ msg }: { msg: Message }) {
             </div>
           )}
         </div>
-        <span className="text-xs text-ink-600 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="text-xs text-ink-400 px-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {formatTime(msg.ts)}
         </span>
       </div>
@@ -194,14 +194,14 @@ export function Chat() {
     <div className="flex flex-col h-full -mx-8 -my-8">
 
       {/* ── Header ── */}
-      <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-ink-900 bg-ink-950">
+      <div className="shrink-0 flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#0E1018]">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center">
             <Bot className="w-4 h-4 text-accent" />
           </div>
           <div>
             <h1 className="text-sm font-semibold text-ink-100">AI Chat</h1>
-            <p className="text-xs text-ink-600">Knows your habits, journal, finance & subscriptions</p>
+            <p className="text-xs text-ink-400">Knows your habits, journal, finance & subscriptions</p>
           </div>
         </div>
 
@@ -218,7 +218,7 @@ export function Chat() {
       </div>
 
       {/* ── Messages area ── */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-6 py-6 bg-[#0E1018]">
         <div className="max-w-3xl mx-auto">
           {messages.length === 0 ? (
             <EmptyState onSuggest={text => send(text)} />
@@ -256,7 +256,7 @@ export function Chat() {
       </div>
 
       {/* ── Input bar ── */}
-      <div className="shrink-0 border-t border-ink-900 bg-ink-950 px-6 py-4">
+      <div className="shrink-0 border-t border-white/5 bg-[#0E1018] px-6 py-4">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-end gap-3 bg-ink-900 border border-ink-800 rounded-2xl px-4 py-3
             focus-within:border-accent/40 transition-colors">
@@ -269,7 +269,7 @@ export function Chat() {
               onKeyDown={handleKey}
               disabled={loading}
               className="flex-1 bg-transparent resize-none outline-none text-sm text-ink-100
-                placeholder:text-ink-600 leading-relaxed disabled:opacity-50
+                placeholder:text-ink-500 leading-relaxed disabled:opacity-50
                 scrollbar-thin scrollbar-thumb-ink-700"
               style={{ maxHeight: '160px' }}
             />
@@ -285,7 +285,7 @@ export function Chat() {
               }
             </button>
           </div>
-          <p className="text-xs text-ink-700 text-center mt-2">
+          <p className="text-xs text-ink-400 text-center mt-2">
             Enter to send · Shift+Enter for new line
           </p>
         </div>

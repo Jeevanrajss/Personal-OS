@@ -57,14 +57,89 @@ def _budget_for(db: Session, year: int, month: int, category: str | None) -> flo
 # Meta — category lists + emoji map
 # ---------------------------------------------------------------------------
 @router.get("/meta", response_model=FinanceMeta)
-def meta():
+def meta(db: Session = Depends(get_db)):
+    from app.models.finance_category import FinanceCategory as FCat
+    cats = db.query(FCat).order_by(FCat.sort_order, FCat.name).all()
+    if not cats:
+        # Fallback to hardcoded list if table is empty (shouldn't happen post-seed)
+        return FinanceMeta(
+            expense_categories=EXPENSE_CATEGORIES,
+            income_categories=INCOME_CATEGORIES,
+            account_suggestions=ACCOUNT_SUGGESTIONS,
+            credit_card_options=CREDIT_CARD_OPTIONS,
+            category_emoji=CATEGORY_EMOJI,
+        )
+    expense_cats = [c.name for c in cats if c.type in ("expense", "both")]
+    income_cats  = [c.name for c in cats if c.type in ("income",  "both")]
+    cat_emoji    = {c.name: c.emoji for c in cats}
     return FinanceMeta(
-        expense_categories=EXPENSE_CATEGORIES,
-        income_categories=INCOME_CATEGORIES,
+        expense_categories=expense_cats,
+        income_categories=income_cats,
         account_suggestions=ACCOUNT_SUGGESTIONS,
         credit_card_options=CREDIT_CARD_OPTIONS,
-        category_emoji=CATEGORY_EMOJI,
+        category_emoji=cat_emoji,
     )
+
+
+# ---------------------------------------------------------------------------
+# Finance categories CRUD
+# ---------------------------------------------------------------------------
+from app.schemas.finance_category import FinanceCategoryIn, FinanceCategoryOut, FinanceCategoryPatch  # noqa: E402
+
+
+@router.get("/categories", response_model=list[FinanceCategoryOut])
+def list_categories(db: Session = Depends(get_db)):
+    from app.models.finance_category import FinanceCategory
+    return (
+        db.query(FinanceCategory)
+        .order_by(FinanceCategory.sort_order, FinanceCategory.name)
+        .all()
+    )
+
+
+@router.post("/categories", response_model=FinanceCategoryOut, status_code=201)
+def create_category(payload: FinanceCategoryIn, db: Session = Depends(get_db)):
+    import uuid as _uuid
+    from app.models.finance_category import FinanceCategory
+    if db.query(FinanceCategory).filter(FinanceCategory.name == payload.name).first():
+        raise HTTPException(status_code=409, detail="A category with that name already exists.")
+    cat = FinanceCategory(
+        id=str(_uuid.uuid4()),
+        name=payload.name,
+        emoji=payload.emoji,
+        type=payload.type,
+        is_system=False,
+        sort_order=500,
+    )
+    db.add(cat)
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+
+@router.patch("/categories/{cat_id}", response_model=FinanceCategoryOut)
+def update_category(cat_id: str, patch: FinanceCategoryPatch, db: Session = Depends(get_db)):
+    from app.models.finance_category import FinanceCategory
+    cat = db.get(FinanceCategory, cat_id)
+    if cat is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    for k, v in patch.model_dump(exclude_unset=True).items():
+        setattr(cat, k, v)
+    db.commit()
+    db.refresh(cat)
+    return cat
+
+
+@router.delete("/categories/{cat_id}", status_code=204)
+def delete_category(cat_id: str, db: Session = Depends(get_db)):
+    from app.models.finance_category import FinanceCategory
+    cat = db.get(FinanceCategory, cat_id)
+    if cat is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+    if cat.is_system:
+        raise HTTPException(status_code=400, detail="System categories cannot be deleted.")
+    db.delete(cat)
+    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +395,8 @@ async def finance_insights(db: Session = Depends(get_db)):
         "You are analysing someone's personal finances. "
         "Give 3–4 short, specific insights: spending trends, categories that increased or decreased, "
         "savings rate, anything worth acting on. "
-        "Output ONLY a numbered list — no headers, no preamble."
+        "Output ONLY a numbered list — no headers, no preamble. "
+        "Use **bold** (markdown double-asterisks) around category names and key amounts so they stand out at a glance."
     )
 
     try:

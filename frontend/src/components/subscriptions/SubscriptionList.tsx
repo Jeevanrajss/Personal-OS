@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArchiveRestore, Check, ChevronDown, Pause, Pencil, Play, Plus, Trash2, X, ExternalLink } from 'lucide-react';
+import { ArchiveRestore, Check, LayoutGrid, List, Pause, Pencil, Play, Plus, Trash2, X, ExternalLink } from 'lucide-react';
 import {
   api,
   CYCLE_LABELS,
@@ -13,8 +13,8 @@ import {
 import { cn } from '@/lib/cn';
 import { EmojiPickerPopover } from '@/components/habits/EmojiPickerPopover';
 import { SubscriptionAddForm } from './SubscriptionAddForm';
+import { AccountSelect, ACCOUNT_TO_PAYMENT_TYPE } from './AccountSelect';
 import {
-  ACCOUNT_SUGGESTIONS,
   CATEGORIES,
   CURRENCY_OPTS,
   CYCLE_OPTS,
@@ -28,10 +28,47 @@ import {
 
 type Filter = 'active' | 'paused' | 'cancelled' | 'all';
 
+/** Brand gradient for the top accent bar (3px) */
+function getSubAccentGrad(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('netflix'))              return 'linear-gradient(90deg, #E50914, #FF5B6E)';
+  if (n.includes('claude') || n.includes('anthropic')) return 'linear-gradient(90deg, #D4756E, #FFA0A0)';
+  if (n.includes('spotify'))              return 'linear-gradient(90deg, #1DB954, #3DFF98)';
+  if (n.includes('apple') || n.includes('icloud')) return 'linear-gradient(90deg, #3EBEFF, #7FDBFF)';
+  if (n.includes('cursor'))               return 'linear-gradient(90deg, #8B7CFF, #B8A5FF)';
+  if (n.includes('gym') || n.includes('fitness'))   return 'linear-gradient(90deg, #FFB86B, #FFD76A)';
+  if (n.includes('youtube'))              return 'linear-gradient(90deg, #FF0000, #FF7070)';
+  if (n.includes('openai') || n.includes('chatgpt')) return 'linear-gradient(90deg, #10a37f, #3DFF98)';
+  if (n.includes('notion'))               return 'linear-gradient(90deg, #ffffff, #cccccc)';
+  if (n.includes('figma'))                return 'linear-gradient(90deg, #F24E1E, #FF7262)';
+  if (n.includes('github'))               return 'linear-gradient(90deg, #6e5494, #8B7CFF)';
+  if (n.includes('amazon') || n.includes('prime')) return 'linear-gradient(90deg, #FF9900, #FFD76A)';
+  return 'linear-gradient(90deg, var(--primary-500), var(--secondary-500))';
+}
+
+/** Brand gradient for the logo box (44×44) */
+function getSubLogoGrad(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('netflix'))              return 'linear-gradient(135deg, #E50914, #831010)';
+  if (n.includes('claude') || n.includes('anthropic')) return 'linear-gradient(135deg, #FFA0A0, #D4756E)';
+  if (n.includes('spotify'))              return 'linear-gradient(135deg, #1DB954, #15803D)';
+  if (n.includes('apple') || n.includes('icloud')) return 'linear-gradient(135deg, #3EBEFF, #0F7AB8)';
+  if (n.includes('cursor'))               return 'linear-gradient(135deg, #232734, #0E1018)';
+  if (n.includes('gym') || n.includes('fitness'))   return 'linear-gradient(135deg, #FFB86B, #B56A00)';
+  if (n.includes('youtube'))              return 'linear-gradient(135deg, #FF0000, #8B0000)';
+  if (n.includes('openai') || n.includes('chatgpt')) return 'linear-gradient(135deg, #10a37f, #065F46)';
+  if (n.includes('notion'))               return 'linear-gradient(135deg, #2d2d2d, #1a1a1a)';
+  if (n.includes('figma'))                return 'linear-gradient(135deg, #F24E1E, #A52A00)';
+  if (n.includes('github'))               return 'linear-gradient(135deg, #6e5494, #3d2b6e)';
+  if (n.includes('amazon') || n.includes('prime')) return 'linear-gradient(135deg, #FF9900, #B36B00)';
+  return 'linear-gradient(135deg, var(--primary-500), #6352DB)';
+}
+
 export function SubscriptionList() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<Filter>('active');
   const [addOpen, setAddOpen] = useState(false);
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
   const { data: allSubs = [], isLoading } = useQuery<Subscription[]>({
     queryKey: ['subscriptions', 'all'],
@@ -87,38 +124,77 @@ export function SubscriptionList() {
   const cancelledCount = allSubs.filter((s) => s.cancelled_at !== null).length;
 
   return (
-    <div className="card">
-      {/* Card header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="card-title mb-0">Subscriptions</div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as Filter)}
-              className="appearance-none bg-ink-900 border border-ink-800 rounded-md pl-2 pr-6 py-1 text-xs text-ink-300 outline-none focus:border-accent/60 cursor-pointer"
+    <div>
+      {/* Toolbar: filter seg + add button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
+        {/* Filter segmented control */}
+        <div style={{ display: 'inline-flex', background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 10, padding: 3, marginRight: 'auto' }}>
+          {(['active', 'paused', 'cancelled', 'all'] as Filter[]).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              style={{
+                height: 28, padding: '0 12px', borderRadius: 7,
+                font: '500 12px/1 var(--font-sans)',
+                color: filter === f ? 'var(--fg-1)' : 'var(--fg-3)',
+                background: filter === f ? 'var(--surface-elev)' : 'transparent',
+                border: 0, cursor: 'pointer',
+                transition: 'var(--transition)',
+              }}
             >
-              <option value="active">Active{activeCount > 0 ? ` (${activeCount})` : ''}</option>
-              <option value="paused">Paused{pausedCount > 0 ? ` (${pausedCount})` : ''}</option>
-              <option value="cancelled">Cancelled{cancelledCount > 0 ? ` (${cancelledCount})` : ''}</option>
-              <option value="all">All ({allSubs.length})</option>
-            </select>
-            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-ink-500 pointer-events-none" />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setAddOpen((o) => !o)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-accent/15 border border-accent/30 text-xs text-accent hover:bg-accent/25 transition-colors"
-          >
-            <Plus className="w-3 h-3" />
-            Add
-          </button>
+              {f === 'active' ? `Active${activeCount > 0 ? ` (${activeCount})` : ''}`
+               : f === 'paused' ? `Paused${pausedCount > 0 ? ` (${pausedCount})` : ''}`
+               : f === 'cancelled' ? `Cancelled${cancelledCount > 0 ? ` (${cancelledCount})` : ''}`
+               : `All (${allSubs.length})`}
+            </button>
+          ))}
         </div>
+
+        {/* View toggle */}
+        <div style={{ display: 'inline-flex', background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 10, padding: 3 }}>
+          {(['grid', 'list'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              title={v === 'grid' ? 'Card grid' : 'List view'}
+              style={{
+                width: 30, height: 28, borderRadius: 7,
+                display: 'grid', placeItems: 'center',
+                color: view === v ? 'var(--fg-1)' : 'var(--fg-4)',
+                background: view === v ? 'var(--surface-elev)' : 'transparent',
+                border: 0, cursor: 'pointer',
+                transition: 'var(--transition)',
+              }}
+            >
+              {v === 'grid'
+                ? <LayoutGrid style={{ width: 14, height: 14 }} />
+                : <List style={{ width: 14, height: 14 }} />
+              }
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setAddOpen((o) => !o)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            height: 36, padding: '0 14px', borderRadius: 10,
+            font: '500 13px/1 var(--font-sans)', color: 'white',
+            background: 'var(--grad-primary)',
+            boxShadow: 'var(--elev-1), var(--elev-glow)',
+            border: 'none', cursor: 'pointer',
+          }}
+        >
+          <Plus style={{ width: 14, height: 14 }} />
+          Add subscription
+        </button>
       </div>
 
       {addOpen && (
-        <div className="mb-3 pb-3 border-b border-ink-800">
+        <div className="card" style={{ marginBottom: 18, padding: 20 }}>
           <SubscriptionAddForm
             onCreate={async (payload) => {
               await createMut.mutateAsync(payload);
@@ -130,27 +206,35 @@ export function SubscriptionList() {
       )}
 
       {isLoading ? (
-        <div className="text-xs text-ink-500 py-6 text-center">Loading…</div>
+        <div style={{ color: 'var(--fg-4)', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>Loading…</div>
       ) : subs.length === 0 ? (
-        <div className="text-xs text-ink-500 py-6 text-center">
-          {filter === 'active' && 'No active subscriptions.'}
-          {filter === 'paused' && 'No paused subscriptions.'}
-          {filter === 'cancelled' && 'No cancelled subscriptions.'}
-          {filter === 'all' && 'No subscriptions yet.'}
+        <div style={{ color: 'var(--fg-4)', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
+          {filter === 'active' ? 'No active subscriptions — add one above.' :
+           filter === 'paused' ? 'No paused subscriptions.' :
+           filter === 'cancelled' ? 'No cancelled subscriptions.' :
+           'No subscriptions yet — add one above.'}
         </div>
       ) : (
-        <ul className="space-y-0.5">
+        <ul
+          style={
+            view === 'grid'
+              ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, margin: 0, padding: 0 }
+              : { display: 'flex', flexDirection: 'column', gap: 6, margin: 0, padding: 0 }
+          }
+        >
           {subs.map((s) =>
             s.cancelled_at !== null ? (
               <CancelledRow
                 key={s.id}
                 sub={s}
+                displayMode={view}
                 onRestore={() => restoreMut.mutateAsync(s.id).then(() => undefined)}
               />
             ) : (
               <SubscriptionRow
                 key={s.id}
                 sub={s}
+                displayMode={view}
                 onSave={(patch) => patchMut.mutateAsync({ id: s.id, patch })}
                 onPause={() => pauseMut.mutateAsync(s.id).then(() => undefined)}
                 onResume={() => unpauseMut.mutateAsync(s.id).then(() => undefined)}
@@ -169,13 +253,14 @@ export function SubscriptionList() {
 // ---------------------------------------------------------------------------
 type RowProps = {
   sub: Subscription;
+  displayMode?: 'grid' | 'list';
   onSave: (patch: SubscriptionPatch) => Promise<Subscription>;
   onPause: () => Promise<void>;
   onResume: () => Promise<void>;
   onCancel: () => Promise<void>;
 };
 
-function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps) {
+function SubscriptionRow({ sub, displayMode = 'grid', onSave, onPause, onResume, onCancel }: RowProps) {
   const isTrial = sub.amount === 0 && sub.trial_end_date !== null;
 
   const [editing, setEditing] = useState(false);
@@ -358,7 +443,7 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
                 <L>Category</L>
                 <input list="sub-categories-edit" value={category} onChange={(e) => setCategory(e.target.value)}
                   placeholder="e.g. Streaming" maxLength={40}
-                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600" />
+                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400" />
                 <datalist id="sub-categories-edit">
                   {CATEGORIES.map((c) => <option key={c} value={c} />)}
                 </datalist>
@@ -380,7 +465,7 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
                 <label className="text-[10px] text-emerald-500/80 uppercase tracking-wide mb-0.5 block">Price after trial</label>
                 <input type="number" value={postTrialAmount} onChange={(e) => setPostTrialAmount(e.target.value)}
                   placeholder="e.g. 399" min="0" step="0.01"
-                  className="w-full bg-ink-900 border border-emerald-500/30 rounded-md px-2 py-1 text-sm outline-none focus:border-emerald-500/60 placeholder:text-ink-700" />
+                  className="w-full bg-ink-900 border border-emerald-500/30 rounded-md px-2 py-1 text-sm outline-none focus:border-emerald-500/60 placeholder:text-ink-400" />
               </div>
             </div>
             <div className="flex items-end gap-2">
@@ -402,7 +487,7 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
                 <L>Category</L>
                 <input list="sub-categories-edit-trial" value={category} onChange={(e) => setCategory(e.target.value)}
                   placeholder="e.g. AI Tools" maxLength={40}
-                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600" />
+                  className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 placeholder:text-ink-400" />
                 <datalist id="sub-categories-edit-trial">
                   {CATEGORIES.map((c) => <option key={c} value={c} />)}
                 </datalist>
@@ -411,8 +496,22 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
           </div>
         )}
 
-        {/* Payment + account (shared) */}
+        {/* Account + payment type (shared) */}
         <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <L>Account</L>
+            <AccountSelect
+              value={accountName}
+              onChange={setAccountName}
+              onAccountPicked={(acc) => {
+                if (acc) {
+                  const pt = ACCOUNT_TO_PAYMENT_TYPE[acc.type];
+                  if (pt) setPaymentType(pt);
+                }
+              }}
+              className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 text-ink-200 placeholder:text-ink-400"
+            />
+          </div>
           <div className="flex-1">
             <L>Payment type</L>
             <select value={paymentType} onChange={(e) => setPaymentType(e.target.value as PaymentType | '')}
@@ -421,15 +520,6 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
               {PAYMENT_TYPE_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <div className="flex-1">
-            <L>Account</L>
-            <input list="account-suggestions-edit" value={accountName} onChange={(e) => setAccountName(e.target.value)}
-              placeholder="e.g. HDFC" maxLength={60}
-              className="w-full bg-ink-900 border border-ink-800 rounded-md px-2 py-1 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600" />
-            <datalist id="account-suggestions-edit">
-              {ACCOUNT_SUGGESTIONS.map((a) => <option key={a} value={a} />)}
-            </datalist>
-          </div>
         </div>
 
         {error && <div className="text-[11px] text-red-400">{error}</div>}
@@ -437,96 +527,327 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
     );
   }
 
-  return (
-    <li className={cn(
-      'group flex items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-ink-950',
-      isPaused && 'opacity-60',
-    )}>
-      <span className="w-6 text-center text-base leading-none shrink-0">{sub.emoji}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm text-ink-100 truncate">{sub.name}</span>
-          {sub.amount === 0 && (
-            <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-              FREE
-            </span>
+  const accentGrad = getSubAccentGrad(sub.name);
+  const logoGrad   = getSubLogoGrad(sub.name);
+
+  // ── List view row ────────────────────────────────────────────────────────
+  if (displayMode === 'list') {
+    return (
+      <li
+        className="group"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '4px 40px 1fr auto auto auto',
+          gap: 0,
+          alignItems: 'center',
+          background: 'var(--surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 14,
+          overflow: 'hidden',
+          listStyle: 'none',
+          transition: 'var(--transition)',
+          opacity: isPaused ? 0.65 : 1,
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLLIElement).style.borderColor = 'var(--border-strong)';
+          (e.currentTarget as HTMLLIElement).style.background = 'var(--surface-hover)';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLLIElement).style.borderColor = 'var(--border-default)';
+          (e.currentTarget as HTMLLIElement).style.background = 'var(--surface)';
+        }}
+      >
+        {/* Left accent stripe */}
+        <div style={{ width: 4, alignSelf: 'stretch', background: accentGrad }} />
+
+        {/* Logo */}
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, margin: '10px 0 10px 12px',
+          background: logoGrad, flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          font: '500 16px/1 var(--font-display)', color: 'white',
+        }}>
+          {sub.emoji || sub.name.charAt(0).toUpperCase()}
+        </div>
+
+        {/* Name + meta */}
+        <div style={{ padding: '10px 20px 10px 18px', minWidth: 0 }}>
+          <div style={{ font: '500 15.5px/1.2 var(--font-display)', color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {sub.name}
+          </div>
+          <div style={{ color: 'var(--fg-4)', fontSize: 11, marginTop: 1, fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>{CYCLE_LABELS[sub.billing_cycle]}</span>
+            {sub.account_name && <><span style={{ opacity: 0.5 }}>·</span><span>{sub.account_name}</span></>}
+            {sub.category && (
+              <span style={{
+                padding: '2px 7px', borderRadius: 999,
+                font: '500 10px/1 var(--font-mono)',
+                background: 'var(--glass-bg)', color: 'var(--fg-3)', border: '1px solid var(--border-default)',
+              }}>
+                {sub.category}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Next billing */}
+        {!isPaused && (
+          <div style={{ padding: '0 14px', textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: days <= 7 ? 'var(--accent-yellow)' : 'var(--fg-2)', fontFamily: 'var(--font-mono)' }}>
+              {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days}d`}
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--fg-4)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+              {sub.next_billing_date}
+            </div>
+          </div>
+        )}
+        {isPaused && (
+          <div style={{ padding: '0 14px' }}>
+            <span style={{
+              padding: '3px 8px', borderRadius: 999,
+              font: '500 10px/1 var(--font-mono)',
+              background: 'var(--glass-bg)', color: 'var(--fg-4)', border: '1px solid var(--border-default)',
+            }}>paused</span>
+          </div>
+        )}
+
+        {/* Price */}
+        <div style={{ padding: '0 14px', textAlign: 'right', flexShrink: 0 }}>
+          <span style={{ font: '500 18px/1 var(--font-display)', letterSpacing: '-0.02em', color: 'var(--fg-1)' }}>
+            {sub.amount === 0
+              ? (sub.post_trial_amount ? formatAmount(sub.post_trial_amount, sub.currency) : 'Free')
+              : formatAmount(sub.amount, sub.currency)}
+          </span>
+          <span style={{ color: 'var(--fg-4)', fontSize: 11, marginLeft: 3 }}>
+            {sub.billing_cycle === 'monthly' ? '/mo' : sub.billing_cycle === 'yearly' ? '/yr' : ''}
+          </span>
+        </div>
+
+        {/* Actions (visible on hover) */}
+        <div
+          className="opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 12px 0 4px' }}
+        >
+          <button type="button" onClick={beginEdit} title="Edit"
+            style={{ padding: 5, borderRadius: 7, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-elev)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-2)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+          >
+            <Pencil style={{ width: 12, height: 12 }} />
+          </button>
+          {isPaused ? (
+            <button type="button" onClick={() => void onResume()} title="Resume"
+              style={{ padding: 5, borderRadius: 7, color: 'var(--accent-green)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}>
+              <Play style={{ width: 12, height: 12 }} />
+            </button>
+          ) : (
+            <button type="button" onClick={() => void onPause()} title="Pause"
+              style={{ padding: 5, borderRadius: 7, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-yellow)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+            >
+              <Pause style={{ width: 12, height: 12 }} />
+            </button>
           )}
-          {isPaused && (
-            <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide px-1 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/25">
-              Paused
-            </span>
-          )}
-          {sub.url && (
-            <a href={sub.url} target="_blank" rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()} className="text-ink-600 hover:text-accent shrink-0">
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
+          {confirmCancel ? (
+            <>
+              <button type="button" onClick={() => void onCancel()}
+                style={{ padding: '3px 7px', borderRadius: 7, fontSize: 10, background: 'rgba(255,91,110,0.12)', border: '1px solid rgba(255,91,110,0.30)', color: 'var(--accent-red)', cursor: 'pointer' }}>
+                Confirm
+              </button>
+              <button type="button" onClick={() => setConfirmCancel(false)}
+                style={{ padding: 5, borderRadius: 7, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}>
+                <X style={{ width: 11, height: 11 }} />
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmCancel(true)} title="Cancel subscription"
+              style={{ padding: 5, borderRadius: 7, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-red)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+            >
+              <Trash2 style={{ width: 12, height: 12 }} />
+            </button>
           )}
         </div>
-        <div className="text-[10px] text-ink-500 truncate">
-          {sub.payment_type && (
-            <span className="mr-1.5">
-              {PAYMENT_TYPE_LABELS[sub.payment_type]}
-              {sub.account_name && ` · ${sub.account_name}`}
-            </span>
+      </li>
+    );
+  }
+
+  // ── Card (grid) view ─────────────────────────────────────────────────────
+  return (
+    <li
+      className="group"
+      style={{
+        position: 'relative',
+        background: 'var(--surface)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 18,
+        padding: 20,
+        overflow: 'hidden',
+        listStyle: 'none',
+        transition: 'var(--transition)',
+        opacity: isPaused ? 0.7 : 1,
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLLIElement).style.borderColor = 'var(--border-strong)';
+        (e.currentTarget as HTMLLIElement).style.transform = 'translateY(-2px)';
+        (e.currentTarget as HTMLLIElement).style.boxShadow = 'var(--elev-2)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLLIElement).style.borderColor = 'var(--border-default)';
+        (e.currentTarget as HTMLLIElement).style.transform = '';
+        (e.currentTarget as HTMLLIElement).style.boxShadow = '';
+      }}
+    >
+      {/* Top accent bar */}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: accentGrad }} />
+
+      {/* Header: logo + name + actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, marginTop: 4 }}>
+        {/* Logo */}
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+          background: logoGrad,
+          display: 'grid', placeItems: 'center',
+          font: '500 18px/1 var(--font-display)', color: 'white',
+        }}>
+          {sub.emoji || sub.name.charAt(0).toUpperCase()}
+        </div>
+
+        {/* Name stack */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.005em', color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {sub.name}
+          </div>
+          <div style={{ color: 'var(--fg-4)', fontSize: 11.5, marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+            {CYCLE_LABELS[sub.billing_cycle]}
+            {sub.account_name ? ` · ${sub.account_name}` : ''}
+          </div>
+        </div>
+
+        {/* More / actions */}
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ display: 'flex', gap: 2 }}>
+          <button type="button" onClick={beginEdit}
+            style={{ padding: 4, borderRadius: 8, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-2)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+          >
+            <Pencil style={{ width: 13, height: 13 }} />
+          </button>
+          {isPaused ? (
+            <button type="button" onClick={() => void onResume()} title="Resume billing"
+              style={{ padding: 4, borderRadius: 8, color: 'var(--accent-yellow)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}>
+              <Play style={{ width: 13, height: 13 }} />
+            </button>
+          ) : (
+            <button type="button" onClick={() => void onPause()} title="Pause billing"
+              style={{ padding: 4, borderRadius: 8, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-yellow)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+            >
+              <Pause style={{ width: 13, height: 13 }} />
+            </button>
           )}
-          {!sub.payment_type && sub.account_name && <span className="mr-1.5">{sub.account_name}</span>}
-          {sub.category && <span className="mr-1.5 text-ink-600">{sub.category}</span>}
-          {sub.amount === 0
-            ? (sub.post_trial_amount
-                ? <span>Free → {formatAmount(sub.post_trial_amount, sub.currency)} {CYCLE_LABELS[sub.billing_cycle]}</span>
-                : <span>Free</span>)
-            : <>{formatAmount(sub.amount, sub.currency)} {CYCLE_LABELS[sub.billing_cycle]}</>
-          }
+          {confirmCancel ? (
+            <>
+              <button type="button" onClick={() => void onCancel()}
+                style={{ padding: '3px 8px', borderRadius: 8, fontSize: 10.5, background: 'rgba(255,91,110,0.12)', border: '1px solid rgba(255,91,110,0.30)', color: 'var(--accent-red)', cursor: 'pointer' }}>
+                Cancel?
+              </button>
+              <button type="button" onClick={() => setConfirmCancel(false)}
+                style={{ padding: 4, borderRadius: 8, color: 'var(--fg-4)', background: 'transparent', border: '1px solid var(--border-default)', cursor: 'pointer' }}>
+                <X style={{ width: 12, height: 12 }} />
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirmCancel(true)}
+              style={{ padding: 4, borderRadius: 8, color: 'var(--fg-4)', background: 'transparent', border: '1px solid transparent', cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-red)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+            >
+              <Trash2 style={{ width: 13, height: 13 }} />
+            </button>
+          )}
         </div>
       </div>
-      {!isPaused && (
-        <div className="text-right shrink-0">
-          <div className={cn('text-[11px] font-medium tabular-nums', urgencyClass(days))}>
-            {describeDaysUntil(days)}
+
+      {/* Price */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+          <span style={{ font: '500 30px/1 var(--font-display)', letterSpacing: '-0.02em', color: 'var(--fg-1)' }}>
+            {sub.amount === 0
+              ? (sub.post_trial_amount ? formatAmount(sub.post_trial_amount, sub.currency) : 'Free')
+              : formatAmount(sub.amount, sub.currency)}
+          </span>
+          <span style={{ color: 'var(--fg-3)', fontSize: 13 }}>
+            {sub.billing_cycle === 'monthly' ? '/mo' : sub.billing_cycle === 'yearly' ? '/yr' : ''}
+          </span>
+        </div>
+        {sub.billing_cycle === 'monthly' && sub.amount > 0 && (
+          <div style={{ color: 'var(--fg-4)', fontSize: 11, marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+            {formatAmount(sub.amount * 12, sub.currency)} / yr
           </div>
-          <div className="text-[10px] text-ink-600">{sub.next_billing_date}</div>
+        )}
+      </div>
+
+      {/* Next billing */}
+      {!isPaused && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center',
+          padding: 12, borderRadius: 12,
+          background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)',
+          marginBottom: 12,
+        }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--surface-elev)', display: 'grid', placeItems: 'center', color: 'var(--fg-3)' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--fg-1)' }}>
+              {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`}
+            </div>
+            <div style={{ color: 'var(--fg-4)', fontSize: 11, fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+              {sub.next_billing_date}
+            </div>
+          </div>
+          <span style={{
+            padding: '4px 9px', borderRadius: 999,
+            font: '500 10.5px/1 var(--font-mono)', letterSpacing: '0.06em',
+            ...(days <= 7
+              ? { background: 'rgba(255,184,107,0.14)', color: 'var(--accent-yellow)', border: '1px solid rgba(255,184,107,0.24)' }
+              : { background: 'rgba(255,255,255,0.04)', color: 'var(--fg-4)', border: '1px solid var(--border-default)' }),
+          }}>
+            {days === 0 ? 'Today' : days <= 3 ? 'Soon' : days <= 7 ? 'This week' : 'OK'}
+          </span>
         </div>
       )}
-      <div className={cn(
-        'flex items-center gap-0.5 transition-opacity',
-        confirmCancel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
-      )}>
-        {confirmCancel ? (
-          <>
-            <button type="button" onClick={() => void onCancel()}
-              className="px-1.5 py-0.5 rounded-md bg-red-500/20 border border-red-500/40 text-[10px] text-red-300 hover:bg-red-500/30">
-              Cancel?
-            </button>
-            <button type="button" onClick={() => setConfirmCancel(false)}
-              className="p-1 rounded-md border border-ink-800 bg-ink-900 text-ink-400 hover:text-ink-200">
-              <X className="w-3 h-3" />
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" onClick={beginEdit} aria-label={`Edit ${sub.name}`}
-              className="p-1 rounded-md border border-transparent text-ink-500 hover:text-ink-200 hover:border-ink-800">
-              <Pencil className="w-3 h-3" />
-            </button>
-            {isPaused ? (
-              <button type="button" onClick={() => void onResume()} aria-label={`Resume ${sub.name}`}
-                title="Resume billing"
-                className="p-1 rounded-md border border-transparent text-amber-500 hover:text-amber-300 hover:border-ink-800">
-                <Play className="w-3 h-3" />
-              </button>
-            ) : (
-              <button type="button" onClick={() => void onPause()} aria-label={`Pause ${sub.name}`}
-                title="Pause billing"
-                className="p-1 rounded-md border border-transparent text-ink-500 hover:text-amber-400 hover:border-ink-800">
-                <Pause className="w-3 h-3" />
-              </button>
-            )}
-            <button type="button" onClick={() => setConfirmCancel(true)} aria-label={`Cancel ${sub.name}`}
-              className="p-1 rounded-md border border-transparent text-ink-500 hover:text-red-300 hover:border-ink-800">
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          padding: '3px 8px', borderRadius: 999,
+          font: '500 10.5px/1 var(--font-mono)',
+          ...(isPaused
+            ? { background: 'var(--glass-bg)', color: 'var(--fg-4)', border: '1px solid var(--border-default)' }
+            : sub.amount === 0
+            ? { background: 'rgba(61,255,152,0.08)', color: 'var(--accent-green)', border: '1px solid rgba(61,255,152,0.24)' }
+            : { background: 'rgba(61,255,152,0.08)', color: 'var(--accent-green)', border: '1px solid rgba(61,255,152,0.24)' }),
+        }}>
+          {isPaused ? 'paused' : sub.amount === 0 ? 'trial' : 'active'}
+        </span>
+        {sub.category && (
+          <span style={{ padding: '3px 8px', borderRadius: 999, font: '500 10.5px/1 var(--font-mono)', background: 'var(--glass-bg)', color: 'var(--fg-3)', border: '1px solid var(--border-default)' }}>
+            {sub.category}
+          </span>
+        )}
+        {sub.url && (
+          <a href={sub.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+            style={{ marginLeft: 'auto', color: 'var(--fg-4)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--primary-300)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--fg-4)'; }}
+          >
+            <ExternalLink style={{ width: 12, height: 12 }} />
+          </a>
         )}
       </div>
     </li>
@@ -536,7 +857,7 @@ function SubscriptionRow({ sub, onSave, onPause, onResume, onCancel }: RowProps)
 // ---------------------------------------------------------------------------
 // Cancelled subscription row
 // ---------------------------------------------------------------------------
-function CancelledRow({ sub, onRestore }: { sub: Subscription; onRestore: () => Promise<void> }) {
+function CancelledRow({ sub, displayMode = 'grid', onRestore }: { sub: Subscription; displayMode?: 'grid' | 'list'; onRestore: () => Promise<void> }) {
   const [restoring, setRestoring] = useState(false);
 
   async function doRestore() {
@@ -544,21 +865,137 @@ function CancelledRow({ sub, onRestore }: { sub: Subscription; onRestore: () => 
     try { await onRestore(); } finally { setRestoring(false); }
   }
 
-  return (
-    <li className="flex items-center gap-2 rounded-md px-1.5 py-1.5 opacity-50 hover:opacity-75 transition-opacity">
-      <span className="w-6 text-center text-base leading-none grayscale">{sub.emoji}</span>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm text-ink-400 truncate line-through">{sub.name}</div>
-        <div className="text-[10px] text-ink-600">
-          cancelled {sub.cancelled_at?.slice(0, 10)} ·{' '}
-          {formatAmount(sub.amount, sub.currency)} {CYCLE_LABELS[sub.billing_cycle]}
+  // ── List view ──────────────────────────────────────────────────────────
+  if (displayMode === 'list') {
+    return (
+      <li
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '4px 40px 1fr auto auto auto',
+          gap: 0,
+          alignItems: 'center',
+          background: 'var(--surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 14,
+          overflow: 'hidden',
+          listStyle: 'none',
+          opacity: 0.45,
+          transition: 'var(--transition)',
+        }}
+      >
+        {/* Left stripe */}
+        <div style={{ width: 4, alignSelf: 'stretch', background: 'linear-gradient(180deg, var(--fg-4), var(--border-default))' }} />
+        {/* Logo */}
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, margin: '10px 0 10px 12px',
+          background: 'var(--surface-elev)', display: 'grid', placeItems: 'center',
+          font: '500 16px/1 var(--font-display)', color: 'var(--fg-4)', filter: 'grayscale(1)',
+        }}>
+          {sub.emoji || sub.name.charAt(0).toUpperCase()}
         </div>
+        {/* Name */}
+        <div style={{ padding: '10px 14px', minWidth: 0 }}>
+          <div style={{ font: '500 14px/1.2 var(--font-display)', color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through' }}>
+            {sub.name}
+          </div>
+          <div style={{ color: 'var(--fg-4)', fontSize: 11, marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+            {CYCLE_LABELS[sub.billing_cycle]} · cancelled {sub.cancelled_at?.slice(0, 10)}
+          </div>
+        </div>
+        {/* Cancelled badge */}
+        <div style={{ padding: '0 14px' }}>
+          <span style={{
+            padding: '3px 8px', borderRadius: 999,
+            font: '500 10px/1 var(--font-mono)',
+            background: 'var(--glass-bg)', color: 'var(--fg-4)', border: '1px solid var(--border-default)',
+          }}>cancelled</span>
+        </div>
+        {/* Price */}
+        <div style={{ padding: '0 14px', textAlign: 'right' }}>
+          <span style={{ font: '500 16px/1 var(--font-display)', letterSpacing: '-0.02em', color: 'var(--fg-3)' }}>
+            {formatAmount(sub.amount, sub.currency)}
+          </span>
+          <span style={{ color: 'var(--fg-4)', fontSize: 11, marginLeft: 3 }}>
+            {sub.billing_cycle === 'monthly' ? '/mo' : sub.billing_cycle === 'yearly' ? '/yr' : ''}
+          </span>
+        </div>
+        {/* Restore */}
+        <div style={{ padding: '0 12px' }}>
+          <button type="button" onClick={() => void doRestore()} disabled={restoring} title="Restore"
+            style={{ padding: 5, borderRadius: 7, color: 'var(--fg-4)', background: 'transparent', border: '1px solid var(--border-default)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-green)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(61,255,152,0.30)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)'; }}
+          >
+            <ArchiveRestore style={{ width: 12, height: 12 }} />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  // ── Card (grid) view ──────────────────────────────────────────────────
+  return (
+    <li
+      style={{
+        position: 'relative',
+        background: 'var(--surface)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 18,
+        padding: 20,
+        overflow: 'hidden',
+        listStyle: 'none',
+        opacity: 0.5,
+        transition: 'var(--transition)',
+      }}
+    >
+      {/* Top accent bar — greyed out */}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: 'linear-gradient(90deg, var(--fg-4), var(--border-default))' }} />
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, marginTop: 4 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+          background: 'var(--surface-elev)',
+          display: 'grid', placeItems: 'center',
+          font: '500 18px/1 var(--font-display)', color: 'var(--fg-4)',
+          filter: 'grayscale(1)',
+        }}>
+          {sub.emoji || sub.name.charAt(0).toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ font: '500 16px/1.2 var(--font-display)', color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through' }}>
+            {sub.name}
+          </div>
+          <div style={{ color: 'var(--fg-4)', fontSize: 11.5, marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+            {CYCLE_LABELS[sub.billing_cycle]} · cancelled {sub.cancelled_at?.slice(0, 10)}
+          </div>
+        </div>
+        <button type="button" onClick={() => void doRestore()} disabled={restoring}
+          title="Restore subscription"
+          style={{ padding: 6, borderRadius: 8, color: 'var(--fg-4)', background: 'var(--surface-elev)', border: '1px solid var(--border-default)', cursor: 'pointer' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-green)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--fg-4)'; }}
+        >
+          <ArchiveRestore style={{ width: 13, height: 13 }} />
+        </button>
       </div>
-      <button type="button" onClick={() => void doRestore()} disabled={restoring}
-        aria-label={`Restore ${sub.name}`} title="Restore"
-        className="p-1 rounded-md border border-transparent text-ink-500 hover:text-accent hover:border-ink-800 disabled:opacity-40 transition-colors">
-        <ArchiveRestore className="w-3.5 h-3.5" />
-      </button>
+
+      {/* Price */}
+      <div style={{ font: '500 28px/1 var(--font-display)', letterSpacing: '-0.02em', color: 'var(--fg-3)', marginBottom: 14 }}>
+        {formatAmount(sub.amount, sub.currency)}
+        <span style={{ color: 'var(--fg-4)', fontSize: 13, fontWeight: 400 }}>
+          {' '}{sub.billing_cycle === 'monthly' ? '/mo' : sub.billing_cycle === 'yearly' ? '/yr' : ''}
+        </span>
+      </div>
+
+      {/* Footer */}
+      <span style={{
+        padding: '3px 8px', borderRadius: 999,
+        font: '500 10.5px/1 var(--font-mono)',
+        background: 'var(--glass-bg)', color: 'var(--fg-4)', border: '1px solid var(--border-default)',
+      }}>
+        cancelled
+      </span>
     </li>
   );
 }

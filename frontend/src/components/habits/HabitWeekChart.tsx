@@ -100,7 +100,7 @@ export function HabitWeekChart({ habits, weekStart }: Props) {
         <div className="text-3xl font-bold text-ink-50 tabular-nums">{overallPct}%</div>
         <div className="text-sm text-ink-500">
           overall this week
-          <span className="ml-1 text-ink-600">({totalDone}/{totalPossible} scheduled)</span>
+          <span className="ml-1 text-ink-400">({totalDone}/{totalPossible} scheduled)</span>
         </div>
         <div className="ml-auto">
           <WeekScoreBadge pct={overallPct} />
@@ -149,7 +149,7 @@ export function HabitWeekChart({ habits, weekStart }: Props) {
             <div key={iso} className="flex-1 text-center">
               <span className={cn(
                 'text-[10px]',
-                isToday ? 'text-accent font-semibold' : 'text-ink-600',
+                isToday ? 'text-accent font-semibold' : 'text-ink-400',
               )}>
                 {DAY_LABELS[(date.getDay() + 6) % 7]}
               </span>
@@ -219,7 +219,7 @@ export function HabitWeekChart({ habits, weekStart }: Props) {
                 </div>
                 <span className={cn(
                   'text-xs tabular-nums w-9 text-right shrink-0',
-                  pct === 100 ? 'text-emerald-400' : total === 0 ? 'text-ink-600' : 'text-ink-400',
+                  pct === 100 ? 'text-emerald-400' : total === 0 ? 'text-ink-400' : 'text-ink-400',
                 )}>
                   {total === 0 ? '—' : `${pct}%`}
                 </span>

@@ -98,27 +98,27 @@ function BudgetRow({
                   <span className={cn('text-xs tabular-nums', over ? 'text-red-400' : 'text-ink-400')}>
                     {fmt(spent, currency)} / {fmt(budget, currency)}
                   </span>
-                  <span className={cn('text-[10px] tabular-nums', over ? 'text-red-400' : 'text-ink-600')}>
+                  <span className={cn('text-[10px] tabular-nums', over ? 'text-red-400' : 'text-ink-400')}>
                     {over ? '⚠️ ' : ''}{pct.toFixed(0)}%
                   </span>
                   <button
                     type="button"
                     onClick={() => { setValue(String(budgetEntry.amount)); setEditing(true); }}
-                    className="text-[10px] text-ink-600 hover:text-accent transition-colors px-1"
+                    className="text-[10px] text-ink-400 hover:text-accent transition-colors px-1"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
                     onClick={onDelete}
-                    className="p-0.5 text-ink-700 hover:text-red-400 transition-colors"
+                    className="p-0.5 text-ink-400 hover:text-red-400 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-ink-600">{fmt(spent, currency)} spent</span>
+                  <span className="text-xs text-ink-400">{fmt(spent, currency)} spent</span>
                   <button
                     type="button"
                     onClick={() => setEditing(true)}
@@ -226,7 +226,7 @@ export function BudgetCard({ year, month, summary, meta, currency }: Props) {
       {/* Per-category budgets */}
       <div className="card">
         <div className="card-title">Category Budgets</div>
-        <p className="text-xs text-ink-600 mb-4">
+        <p className="text-xs text-ink-400 mb-4">
           Set limits for individual spending categories. The AI will warn you when you're close to
           or over your limit.
         </p>
@@ -247,7 +247,7 @@ export function BudgetCard({ year, month, summary, meta, currency }: Props) {
           ))}
         </div>
 
-        <p className="text-[10px] text-ink-700 mt-4 border-t border-ink-900 pt-3">
+        <p className="text-[10px] text-ink-400 mt-4 border-t border-white/5 pt-3">
           Budgets with no year/month set are recurring and apply every month. Setting one for a
           specific month overrides the recurring limit for that month only.
         </p>

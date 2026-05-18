@@ -104,7 +104,7 @@ Supported cloud providers: OpenAI, Anthropic (Claude), Google Gemini, Groq, Toge
 ┌────────────▼────────────────────┐
 │  FastAPI backend  :8000         │
 │  SQLAlchemy · Pydantic v2       │
-│  SQLite  (data/personal-os.db)  │
+│  SQLite  (data/north-os.db)  │
 └────────────┬────────────────────┘
              │  OpenAI-compatible API
 ┌────────────▼────────────────────┐
@@ -180,7 +180,7 @@ All settings live in `.env` at the project root.
 | `APP_ENV` | `dev` | `dev` or `prod` |
 | `TIMEZONE` | `Asia/Kolkata` | Your timezone (IANA, e.g. `America/New_York`) |
 | `CURRENCY` | `INR` | Default currency shown in Finance |
-| `DB_PATH` | `data/personal-os.db` | SQLite file path |
+| `DB_PATH` | `data/north-os.db` | SQLite file path |
 | `DB_ENCRYPTION` | `false` | Enable SQLCipher encryption (not supported on Windows) |
 | `DB_PASSPHRASE` | *(unset)* | Encryption passphrase (only when encryption is on) |
 | `LLM_HOST` | `http://127.0.0.1:1234` | Local LLM server URL (overridden by Settings page) |
@@ -217,7 +217,7 @@ DB_ENCRYPTION=true
 DB_PASSPHRASE=your-strong-passphrase
 ```
 
-> ⚠️ Enable encryption **before** creating any data, or delete `data/personal-os.db` first.  
+> ⚠️ Enable encryption **before** creating any data, or delete `data/north-os.db` first.  
 > ⚠️ Not supported on Windows.
 
 ---
@@ -249,7 +249,7 @@ Backend: `uvicorn app.main:app --port 8001` then update `frontend/vite.config.ts
 Make sure the backend is running on `:8000` — Vite proxies `/api/*` to it.
 
 **Reset the database**  
-Delete `data/personal-os.db` and restart the backend. Fresh schema is created automatically.
+Delete `data/north-os.db` and restart the backend. Fresh schema is created automatically.
 
 ---
 
@@ -260,7 +260,7 @@ Personal-OS/
 ├── setup.sh / setup.bat        ← one-command install + launch
 ├── .env                        ← your local config (git-ignored)
 ├── data/
-│   └── personal-os.db          ← SQLite database (auto-created)
+│   └── north-os.db          ← SQLite database (auto-created)
 │
 ├── backend/
 │   ├── pyproject.toml          ← Python dependencies (includes fpdf2, pandas)

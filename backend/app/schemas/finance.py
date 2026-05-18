@@ -24,6 +24,7 @@ EXPENSE_CATEGORIES = [
     "Fitness",
     "Travel",
     "Subscriptions",
+    "Splits",      # money you fronted for the group — will be reimbursed
     "Other",
 ]
 
@@ -32,7 +33,7 @@ INCOME_CATEGORIES = [
     "Freelance",
     "Investment",
     "Gift",
-    "Splits",
+    "Splits",      # friends paying you back
     "Other Income",
 ]
 

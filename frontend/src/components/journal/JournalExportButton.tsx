@@ -86,7 +86,7 @@ export function JournalExportButton() {
                 />
               </div>
 
-              <p className="text-[11px] text-ink-600">
+              <p className="text-[11px] text-ink-400">
                 Exports as Markdown (.md) — includes mood, tags, daily summary, and all entries.
               </p>
 

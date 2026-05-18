@@ -145,7 +145,7 @@ export function TransactionForm({ meta, initial, defaultType = 'expense', onSubm
             onChange={(e) => setPayee(e.target.value)}
             placeholder="e.g. Swiggy"
             maxLength={80}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+            className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-500"
           />
         </div>
         <div>
@@ -156,7 +156,7 @@ export function TransactionForm({ meta, initial, defaultType = 'expense', onSubm
             onChange={(e) => setAccount(e.target.value)}
             placeholder="e.g. HDFC"
             maxLength={60}
-            className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600"
+            className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-500"
           />
           <datalist id="account-list">
             {meta.account_suggestions.map((a) => <option key={a} value={a} />)}
@@ -191,7 +191,7 @@ export function TransactionForm({ meta, initial, defaultType = 'expense', onSubm
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="Any extra detail…"
-          className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-600 resize-none"
+          className="w-full bg-ink-900 border border-ink-800 rounded-md px-3 py-2 text-sm outline-none focus:border-accent/60 placeholder:text-ink-500 resize-none"
         />
       </div>
 

@@ -1,76 +1,157 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { renderBold } from '@/lib/renderBold';
+import { useAIContent } from '@/contexts/AIContentContext';
+
+const KEY = 'finance-insights';
+
+const STAR = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
+  </svg>
+);
 
 export function FinanceInsightsCard() {
-  const [insights, setInsights] = useState<string[] | null>(null);
+  const { getSlot, run } = useAIContent();
+  const slot = getSlot(KEY);
 
-  const mut = useMutation({
-    mutationFn: () => api.finance.insights(),
-    onSuccess: (data) => setInsights(data.insights),
-  });
+  const insights: string[] = slot.text ? (JSON.parse(slot.text) as string[]) : [];
+  const generated = slot.text !== null;
 
-  const offline = mut.isError && (mut.error as Error).message.includes('503');
+  function handleGenerate() {
+    run(KEY, async () => {
+      const data = await api.finance.insights();
+      return JSON.stringify(data.insights);
+    });
+  }
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-accent" />
-          <div className="card-title !mb-0">AI Insights</div>
-        </div>
+    <div style={{
+      position: 'relative',
+      borderRadius: 16,
+      padding: '18px 20px',
+      background: `
+        radial-gradient(360px 200px at 90% 0%, rgba(139,124,255,0.20), transparent 60%),
+        linear-gradient(135deg, rgba(139,124,255,0.06), rgba(139,124,255,0.01)),
+        var(--surface)
+      `,
+      border: '1px solid rgba(139,124,255,0.24)',
+      overflow: 'hidden',
+    }}>
+      {/* AI tag */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        color: 'var(--primary-300)',
+        font: '500 12px/1 var(--font-sans)',
+        letterSpacing: '0.12em', textTransform: 'uppercase',
+        marginBottom: 10,
+      }}>
+        {STAR}
+        North AI · finance
+      </div>
+
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <h3 style={{ margin: 0, font: '500 15px/1.3 var(--font-display)', color: 'var(--fg-1)' }}>
+          {generated && insights.length > 0 ? 'AI Insights' : 'Finance Insights'}
+        </h3>
         <button
           type="button"
-          onClick={() => mut.mutate()}
-          disabled={mut.isPending}
-          title={insights ? 'Regenerate' : 'Generate insights'}
-          className="p-1 rounded-md border border-transparent text-ink-500 hover:text-accent hover:border-ink-800 disabled:opacity-40 transition-colors"
+          onClick={handleGenerate}
+          disabled={slot.isPending}
+          title={generated ? 'Regenerate' : 'Generate insights'}
+          style={{
+            padding: 5, borderRadius: 7,
+            color: 'var(--primary-300)',
+            background: 'rgba(139,124,255,0.10)',
+            border: '1px solid rgba(139,124,255,0.22)',
+            cursor: 'pointer', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139,124,255,0.20)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139,124,255,0.10)'; }}
         >
-          {mut.isPending
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : <RefreshCw className="w-3.5 h-3.5" />
+          {slot.isPending
+            ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
+            : <RefreshCw style={{ width: 13, height: 13 }} />
           }
         </button>
       </div>
 
-      {mut.isPending && !insights && (
-        <div className="space-y-2">
+      {/* Skeleton while loading */}
+      {slot.isPending && !generated && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
           {[90, 75, 60].map((w, i) => (
-            <div key={i} className="h-3 bg-ink-800 rounded animate-pulse" style={{ width: `${w}%` }} />
+            <div key={i} className="animate-pulse" style={{ height: 12, borderRadius: 6, background: 'rgba(139,124,255,0.12)', width: `${w}%` }} />
           ))}
         </div>
       )}
 
-      {offline && <p className="text-xs text-amber-400">LM Studio is offline.</p>}
-      {mut.isError && !offline && <p className="text-xs text-red-400">{(mut.error as Error).message}</p>}
-
-      {insights && insights.length === 0 && (
-        <p className="text-xs text-ink-600">No data yet — add some transactions first.</p>
+      {/* Error */}
+      {slot.error && (
+        <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.18)' }}>
+          <p style={{ margin: '0 0 2px', fontSize: 12, color: '#fca5a5', fontWeight: 500 }}>
+            {slot.errorKind === 'unreachable' ? '📡 AI not reachable' :
+             slot.errorKind === 'auth' ? '🔑 API key rejected' :
+             slot.errorKind === 'model' ? '🤔 Model not found' : '⚠️ AI error'}
+          </p>
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--fg-4)' }}>
+            <Link to="/app/settings" style={{ color: 'var(--primary-300)', textDecoration: 'underline' }}>
+              Check Settings → AI Provider
+            </Link>
+          </p>
+        </div>
       )}
 
-      {insights && insights.length > 0 && (
-        <ul className="space-y-2">
+      {/* Empty after generation */}
+      {generated && insights.length === 0 && !slot.isPending && (
+        <p style={{ fontSize: 12.5, color: 'var(--fg-3)', lineHeight: '19px', marginTop: 8 }}>
+          No data yet — add some transactions first.
+        </p>
+      )}
+
+      {/* Insights list */}
+      {insights.length > 0 && (
+        <ul style={{ margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {insights.map((ins, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className="shrink-0 w-5 h-5 rounded-full bg-accent/15 border border-accent/30 text-accent text-[10px] font-semibold flex items-center justify-center mt-0.5">
+            <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{
+                flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
+                background: 'rgba(139,124,255,0.15)', border: '1px solid rgba(139,124,255,0.30)',
+                color: 'var(--primary-300)',
+                fontSize: 10, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginTop: 1,
+              }}>
                 {i + 1}
               </span>
-              <p className="text-xs text-ink-300 leading-relaxed">{ins}</p>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-3)', lineHeight: '19px' }}>
+                {renderBold(ins)}
+              </p>
             </li>
           ))}
         </ul>
       )}
 
-      {!insights && !mut.isPending && !mut.isError && (
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-ink-500">Compare this month vs last month.</p>
+      {/* Initial CTA (not yet generated) */}
+      {!generated && !slot.isPending && !slot.error && (
+        <div style={{ marginTop: 8 }}>
+          <p style={{ margin: '0 0 14px', color: 'var(--fg-3)', fontSize: 12.5, lineHeight: '19px' }}>
+            Compare this month vs last month, find spending patterns, and get budget recommendations.
+          </p>
           <button
             type="button"
-            onClick={() => mut.mutate()}
-            className="text-xs text-accent hover:underline shrink-0"
+            onClick={handleGenerate}
+            style={{
+              height: 32, padding: '0 14px', borderRadius: 8,
+              font: '500 12px/1 var(--font-sans)', color: 'white',
+              background: 'var(--grad-primary)',
+              border: 'none', cursor: 'pointer',
+              boxShadow: '0 0 16px rgba(139,124,255,0.30)',
+            }}
           >
-            Generate
+            Reflect on finances
           </button>
         </div>
       )}

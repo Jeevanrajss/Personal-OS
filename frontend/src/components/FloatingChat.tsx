@@ -80,13 +80,18 @@ export function FloatingChat() {
       <div
         ref={panelRef}
         className={cn(
-          'w-80 bg-ink-950 border border-ink-800 rounded-xl shadow-2xl flex flex-col overflow-hidden',
+          'w-80 border rounded-2xl shadow-2xl flex flex-col overflow-hidden',
           'transition-all duration-200 origin-bottom-right',
           open
             ? 'opacity-100 scale-100 pointer-events-auto'
             : 'opacity-0 scale-95 pointer-events-none',
         )}
-        style={{ height: '440px' }}
+        style={{
+          height: '440px',
+          background: 'linear-gradient(180deg, #0e0e20 0%, #08080f 100%)',
+          borderColor: 'rgba(124,58,237,0.2)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,58,237,0.1)',
+        }}
       >
         {/* Header */}
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-ink-800 shrink-0">
@@ -96,7 +101,7 @@ export function FloatingChat() {
             <button
               type="button"
               onClick={() => { setMessages([]); mut.reset(); }}
-              className="text-[10px] text-ink-600 hover:text-ink-400 transition-colors mr-1"
+              className="text-[10px] text-ink-400 hover:text-ink-400 transition-colors mr-1"
             >
               Clear
             </button>
@@ -104,7 +109,7 @@ export function FloatingChat() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-ink-600 hover:text-ink-300 transition-colors"
+            className="text-ink-400 hover:text-ink-300 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -114,7 +119,7 @@ export function FloatingChat() {
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5 min-h-0">
           {messages.length === 0 && !mut.isPending && (
             <div className="space-y-2 pt-1">
-              <p className="text-[11px] text-ink-600">
+              <p className="text-[11px] text-ink-400">
                 Ask me anything — your data, productivity, advice, or just chat.
               </p>
               <div className="flex flex-col gap-1.5">
@@ -149,7 +154,7 @@ export function FloatingChat() {
             <div className="flex justify-start">
               <div className="bg-ink-900 border border-ink-800 rounded-lg px-2.5 py-2 flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 text-ink-500 animate-spin" />
-                <span className="text-[11px] text-ink-600">Thinking…</span>
+                <span className="text-[11px] text-ink-400">Thinking…</span>
               </div>
             </div>
           )}
@@ -173,14 +178,15 @@ export function FloatingChat() {
             onKeyDown={onKeyDown}
             placeholder="Ask me anything…"
             rows={1}
-            className="flex-1 resize-none overflow-hidden bg-ink-900 border border-ink-800 rounded-md px-2.5 py-1.5 text-xs text-ink-100 placeholder:text-ink-600 outline-none focus:border-accent/60 leading-relaxed"
+            className="flex-1 resize-none overflow-hidden bg-ink-900 border border-ink-800 rounded-md px-2.5 py-1.5 text-xs text-ink-100 placeholder:text-ink-500 outline-none focus:border-accent/60 leading-relaxed"
             style={{ minHeight: '34px' }}
           />
           <button
             type="button"
             onClick={() => send()}
             disabled={!input.trim() || mut.isPending}
-            className="p-1.5 rounded-md bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 disabled:opacity-40 transition-colors shrink-0"
+            className="p-1.5 rounded-lg border border-accent/30 text-white disabled:opacity-40 transition-all shrink-0"
+            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)' }}
           >
             {mut.isPending
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -196,12 +202,16 @@ export function FloatingChat() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all duration-200',
-          'border focus:outline-none',
+          'w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all duration-200',
+          'focus:outline-none',
           open
-            ? 'bg-ink-800 border-ink-700 text-ink-300 hover:bg-ink-700'
-            : 'bg-accent border-accent/60 text-white hover:bg-accent/90 hover:shadow-accent/30 hover:shadow-xl',
+            ? 'bg-ink-800 border border-ink-700 text-ink-300 hover:bg-ink-700'
+            : 'text-white border border-accent/30',
         )}
+        style={open ? {} : {
+          background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)',
+          boxShadow: '0 4px 20px rgba(124,58,237,0.4), 0 0 0 1px rgba(124,58,237,0.2)',
+        }}
         aria-label="Open chat"
       >
         {open

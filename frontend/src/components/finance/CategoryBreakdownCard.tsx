@@ -1,10 +1,39 @@
 import { type BudgetProgress, type CategoryStat, type FinanceMeta } from '@/lib/api';
-import { cn } from '@/lib/cn';
 
-const BAR_COLORS = [
-  'bg-violet-500', 'bg-sky-500', 'bg-emerald-500', 'bg-amber-500',
-  'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500',
-];
+/** Maps category → gradient for the bar fill */
+const CAT_BAR_GRADS: Record<string, string> = {
+  subscriptions: 'linear-gradient(90deg, var(--primary-500), var(--accent-pink))',
+  streaming:     'linear-gradient(90deg, var(--primary-500), var(--accent-pink))',
+  food:          'linear-gradient(90deg, var(--accent-orange), var(--accent-yellow))',
+  dining:        'linear-gradient(90deg, var(--accent-orange), var(--accent-yellow))',
+  transport:     'linear-gradient(90deg, var(--secondary-500), var(--primary-500))',
+  travel:        'linear-gradient(90deg, var(--secondary-500), var(--primary-500))',
+  shopping:      'linear-gradient(90deg, var(--accent-pink), var(--primary-500))',
+  retail:        'linear-gradient(90deg, var(--accent-pink), var(--primary-500))',
+  bills:         'linear-gradient(90deg, var(--accent-red), var(--accent-orange))',
+  utilities:     'linear-gradient(90deg, var(--accent-red), var(--accent-orange))',
+  health:        'linear-gradient(90deg, #FF7AD9, var(--accent-pink))',
+  medical:       'linear-gradient(90deg, #FF7AD9, var(--accent-pink))',
+};
+
+function getCatBarGrad(category: string): string {
+  const c = category.toLowerCase();
+  for (const [key, grad] of Object.entries(CAT_BAR_GRADS)) {
+    if (c.includes(key)) return grad;
+  }
+  return 'linear-gradient(90deg, var(--primary-500), var(--secondary-500))';
+}
+
+function getCatDotColor(category: string): string {
+  const c = category.toLowerCase();
+  if (c.includes('sub') || c.includes('stream')) return 'var(--primary-500)';
+  if (c.includes('food') || c.includes('dining')) return 'var(--accent-orange)';
+  if (c.includes('transport') || c.includes('travel')) return 'var(--secondary-500)';
+  if (c.includes('shop') || c.includes('retail')) return 'var(--accent-pink)';
+  if (c.includes('bill') || c.includes('util')) return 'var(--accent-red)';
+  if (c.includes('health') || c.includes('medical')) return '#FF7AD9';
+  return 'var(--fg-4)';
+}
 
 type Props = {
   stats: CategoryStat[];
@@ -24,9 +53,14 @@ function fmt(n: number, currency: string) {
 export function CategoryBreakdownCard({ stats, meta, currency, budgetByCategory = [] }: Props) {
   if (stats.length === 0) {
     return (
-      <div className="card">
-        <div className="card-title">Spending by Category</div>
-        <p className="text-xs text-ink-600 text-center py-6">No expenses this month.</p>
+      <div className="card" style={{ padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)' }}>
+            Top Categories
+          </h3>
+          <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>This month</span>
+        </div>
+        <p style={{ textAlign: 'center', padding: '24px 0', color: 'var(--fg-4)', fontSize: 13 }}>No expenses this month.</p>
       </div>
     );
   }
@@ -36,73 +70,74 @@ export function CategoryBreakdownCard({ stats, meta, currency, budgetByCategory 
   const top = stats.slice(0, 7);
 
   return (
-    <div className="card">
-      <div className="card-title">Spending by Category</div>
-      <div className="space-y-3.5">
-        {top.map((s, i) => {
-          const pct = (s.total / max) * 100;
-          const bp = budgetMap[s.category];
-          const over = bp ? s.total > bp.budget : false;
+    <div className="card" style={{ padding: 22 }}>
+      {/* Card head */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h3 style={{ margin: 0, font: '500 16px/1.2 var(--font-display)', letterSpacing: '-0.01em', color: 'var(--fg-1)' }}>
+          Top Categories
+        </h3>
+        <span style={{ color: 'var(--fg-4)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+          {new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+        </span>
+      </div>
 
-          return (
-            <div key={s.category}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm shrink-0">{meta.category_emoji[s.category] ?? '📌'}</span>
-                  <span className="text-xs text-ink-300 truncate">{s.category}</span>
-                  <span className="text-[10px] text-ink-600 shrink-0">×{s.count}</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                  <span className={cn('text-xs font-medium tabular-nums', over ? 'text-red-400' : 'text-ink-200')}>
-                    {fmt(s.total, currency)}
-                  </span>
-                  {bp && (
-                    <span className={cn(
-                      'text-[10px] tabular-nums px-1.5 py-0.5 rounded',
-                      over
-                        ? 'bg-red-500/15 text-red-400'
-                        : bp.pct > 80
-                        ? 'bg-amber-500/15 text-amber-400'
-                        : 'bg-ink-900 text-ink-600',
-                    )}>
-                      {over ? '⚠ ' : ''}{bp.pct.toFixed(0)}%
-                    </span>
-                  )}
-                </div>
-              </div>
+      {/* Category rows */}
+      {top.map((s) => {
+        const pct = (s.total / max) * 100;
+        const bp = budgetMap[s.category];
+        const over = bp ? s.total > bp.budget : false;
+        const emoji = meta.category_emoji[s.category] ?? '📌';
+        const dotColor = getCatDotColor(s.category);
+        const barGrad = over ? 'linear-gradient(90deg, var(--accent-red), var(--accent-orange))' : getCatBarGrad(s.category);
 
-              {/* Spending bar */}
-              <div className="relative h-1.5 bg-ink-900 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-500',
-                    over
-                      ? 'bg-red-500'
-                      : BAR_COLORS[i % BAR_COLORS.length],
-                  )}
-                  style={{ width: `${pct}%` }}
-                />
-                {/* Budget marker line */}
-                {bp && bp.budget > 0 && (
-                  <div
-                    className="absolute top-0 h-full w-px bg-white/30"
-                    style={{ left: `${Math.min((bp.budget / max) * 100, 100)}%` }}
-                  />
-                )}
-              </div>
+        return (
+          <div
+            key={s.category}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr auto',
+              gap: 4,
+              marginBottom: 16,
+            }}
+          >
+            {/* Row: label */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: 'var(--fg-1)' }}>
+              <i style={{ width: 8, height: 8, borderRadius: 999, background: dotColor, flexShrink: 0, display: 'inline-block' }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {emoji} {s.category}
+              </span>
+            </div>
 
-              {/* Budget label */}
+            {/* Row: value */}
+            <div style={{ color: over ? 'var(--accent-red)' : 'var(--fg-2)', fontFamily: 'var(--font-mono)', fontSize: 12.5, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>{fmt(s.total, currency)}</span>
               {bp && (
-                <div className="flex justify-end mt-0.5">
-                  <span className="text-[10px] text-ink-700">
-                    of {fmt(bp.budget, currency)} budget
-                  </span>
-                </div>
+                <span style={{
+                  fontSize: 10.5, padding: '2px 6px', borderRadius: 6,
+                  background: over ? 'rgba(255,91,110,0.12)' : bp.pct > 80 ? 'rgba(255,184,107,0.12)' : 'var(--surface-hover)',
+                  color: over ? 'var(--accent-red)' : bp.pct > 80 ? 'var(--accent-yellow)' : 'var(--fg-4)',
+                }}>
+                  {over ? '⚠ ' : ''}{bp.pct.toFixed(0)}%
+                </span>
               )}
             </div>
-          );
-        })}
-      </div>
+
+            {/* Bar (full width) */}
+            <div style={{ gridColumn: '1 / -1', height: 4, borderRadius: 999, background: 'var(--surface-hover)', overflow: 'hidden', marginTop: 8, position: 'relative' }}>
+              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: barGrad, transition: 'width 500ms ease' }} />
+              {bp && bp.budget > 0 && (
+                <div style={{ position: 'absolute', top: 0, height: '100%', width: 1, background: 'rgba(255,255,255,0.30)', left: `${Math.min((bp.budget / max) * 100, 100)}%` }} />
+              )}
+            </div>
+
+            {/* Meta (full width) */}
+            <div style={{ gridColumn: '1 / -1', color: 'var(--fg-4)', fontSize: 11, fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+              {s.count} transaction{s.count !== 1 ? 's' : ''}
+              {bp ? ` · of ${fmt(bp.budget, currency)} budget` : ''}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

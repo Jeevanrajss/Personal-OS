@@ -40,11 +40,11 @@ export function JournalAnnualCard() {
       <div className="card-title">Year in review</div>
 
       {isLoading ? (
-        <div className="h-24 flex items-center justify-center text-xs text-ink-600">
+        <div className="h-24 flex items-center justify-center text-xs text-ink-400">
           Loading…
         </div>
       ) : totalEntries === 0 ? (
-        <div className="h-16 flex items-center justify-center text-xs text-ink-600">
+        <div className="h-16 flex items-center justify-center text-xs text-ink-400">
           No journal entries yet.
         </div>
       ) : (
@@ -119,14 +119,14 @@ export function JournalAnnualCard() {
           {/* Month labels */}
           <div className="flex gap-1 mt-1.5">
             {months.map((m) => (
-              <div key={m.year_month} className="flex-1 text-center text-[9px] text-ink-600 truncate">
+              <div key={m.year_month} className="flex-1 text-center text-[9px] text-ink-400 truncate">
                 {m.year_month.slice(5)}
               </div>
             ))}
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-3 mt-3 text-[10px] text-ink-600">
+          <div className="flex items-center gap-3 mt-3 text-[10px] text-ink-400">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-sm bg-emerald-500/50 inline-block" />
               Positive

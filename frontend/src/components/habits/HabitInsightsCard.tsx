@@ -1,85 +1,137 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { Loader2, Sparkles, TrendingUp } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
-import { cn } from '@/lib/cn';
+import { renderBold } from '@/lib/renderBold';
+import { useAIContent } from '@/contexts/AIContentContext';
+
+const KEY = 'habit-insights';
+
+const STAR = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z" />
+  </svg>
+);
 
 export function HabitInsightsCard() {
-  const [insights, setInsights] = useState<string[]>([]);
-  const [generated, setGenerated] = useState(false);
+  const { getSlot, run } = useAIContent();
+  const slot = getSlot(KEY);
 
-  const mut = useMutation({
-    mutationFn: () => api.ai.habitInsights(),
-    onSuccess: (data) => {
-      setInsights(data.insights);
-      setGenerated(true);
-    },
-  });
+  const insights: string[] = slot.text ? (JSON.parse(slot.text) as string[]) : [];
+  const generated = slot.text !== null;
 
-  const offline = mut.isError && (mut.error as Error).message.includes('503');
+  function handleGenerate() {
+    run(KEY, async () => {
+      const data = await api.ai.habitInsights();
+      return JSON.stringify(data.insights);
+    });
+  }
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-accent" />
-          <div className="card-title !mb-0">AI Habit Insights</div>
-        </div>
+    <div style={{
+      position: 'relative',
+      borderRadius: 16,
+      padding: '18px 20px',
+      background: `
+        radial-gradient(360px 200px at 90% 0%, rgba(255,184,107,0.14), transparent 60%),
+        linear-gradient(135deg, rgba(255,184,107,0.04), rgba(255,184,107,0.01)),
+        var(--surface)
+      `,
+      border: '1px solid rgba(255,184,107,0.20)',
+      overflow: 'hidden',
+    }}>
+      {/* AI tag */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        color: 'var(--accent-orange)',
+        font: '500 12px/1 var(--font-sans)',
+        letterSpacing: '0.12em', textTransform: 'uppercase',
+        marginBottom: 10,
+      }}>
+        {STAR}
+        North AI · habits
+      </div>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <h3 style={{ margin: 0, font: '500 15px/1.3 var(--font-display)', color: 'var(--fg-1)' }}>
+          Habit Insights
+        </h3>
         <button
           type="button"
-          onClick={() => mut.mutate()}
-          disabled={mut.isPending}
-          className={cn(
-            'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px]',
-            'border border-accent/30 bg-accent/10 text-accent',
-            'hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors',
-          )}
+          onClick={handleGenerate}
+          disabled={slot.isPending}
+          title={generated ? 'Refresh' : 'Generate insights'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', borderRadius: 7,
+            font: '500 12px/1 var(--font-sans)',
+            color: 'var(--accent-orange)',
+            background: 'rgba(255,184,107,0.10)',
+            border: '1px solid rgba(255,184,107,0.22)',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,184,107,0.20)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,184,107,0.10)'; }}
         >
-          {mut.isPending
-            ? <><Loader2 className="w-3 h-3 animate-spin" /> Analysing…</>
-            : <><Sparkles className="w-3 h-3" /> {generated ? 'Refresh' : 'Generate'}</>
+          {slot.isPending
+            ? <><Loader2 style={{ width: 11, height: 11 }} className="animate-spin" /> Analysing…</>
+            : <><RefreshCw style={{ width: 11, height: 11 }} /> {generated ? 'Refresh' : 'Generate'}</>
           }
         </button>
       </div>
 
-      {!generated && !mut.isPending && (
-        <p className="text-xs text-ink-500">
-          Click Generate to get AI-powered insights about your habit patterns from the last 30 days.
+      {!generated && !slot.isPending && !slot.error && (
+        <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--fg-3)', lineHeight: '19px' }}>
+          AI-powered insights about your habit patterns from the last 30 days.
         </p>
       )}
 
-      {mut.isPending && (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-4 bg-ink-900 rounded animate-pulse" style={{ width: `${70 + i * 8}%` }} />
+      {slot.isPending && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          {[90, 75, 60].map((w, i) => (
+            <div key={i} className="animate-pulse" style={{ height: 12, borderRadius: 6, background: 'rgba(255,184,107,0.12)', width: `${w}%` }} />
           ))}
         </div>
       )}
 
-      {offline && (
-        <p className="text-xs text-amber-400">
-          LM Studio is offline — start it and load a chat model to use AI insights.
-        </p>
+      {slot.error && (
+        <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.18)' }}>
+          <p style={{ margin: '0 0 2px', fontSize: 12, color: '#fca5a5', fontWeight: 500 }}>
+            {slot.errorKind === 'unreachable' ? '📡 AI not reachable' :
+             slot.errorKind === 'auth' ? '🔑 API key rejected' :
+             slot.errorKind === 'model' ? '🤔 Model not found' : '⚠️ AI error'}
+          </p>
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--fg-4)' }}>
+            <Link to="/app/settings" style={{ color: 'var(--primary-300)', textDecoration: 'underline' }}>
+              Check Settings → AI Provider
+            </Link>
+          </p>
+        </div>
       )}
 
-      {mut.isError && !offline && (
-        <p className="text-xs text-red-400">{(mut.error as Error).message}</p>
-      )}
-
-      {generated && insights.length === 0 && !mut.isPending && (
-        <p className="text-xs text-ink-500">
-          Not enough data yet — keep tracking for a few more days and try again.
+      {generated && insights.length === 0 && !slot.isPending && (
+        <p style={{ fontSize: 12.5, color: 'var(--fg-3)', lineHeight: '19px', marginTop: 8 }}>
+          Not enough data yet — keep tracking for a few more days.
         </p>
       )}
 
       {insights.length > 0 && (
-        <ul className="space-y-2.5">
+        <ul style={{ margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {insights.map((insight, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className="shrink-0 w-5 h-5 rounded-full bg-accent/15 border border-accent/25 text-accent text-[10px] font-semibold flex items-center justify-center mt-0.5">
+            <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{
+                flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
+                background: 'rgba(255,184,107,0.15)', border: '1px solid rgba(255,184,107,0.30)',
+                color: 'var(--accent-orange)',
+                fontSize: 10, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginTop: 1,
+              }}>
                 {i + 1}
               </span>
-              <p className="text-sm text-ink-200 leading-relaxed">{insight}</p>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--fg-3)', lineHeight: '19px' }}>
+                {renderBold(insight)}
+              </p>
             </li>
           ))}
         </ul>

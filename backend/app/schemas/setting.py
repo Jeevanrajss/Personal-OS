@@ -118,3 +118,13 @@ class LLMTestResult(BaseModel):
     model: str
     response: str | None
     error: str | None
+
+
+class LLMHealthResult(BaseModel):
+    """Result of the fast reachability probe (GET /settings/health)."""
+    ok: bool | None        # None = not applicable (e.g. Anthropic)
+    provider: str
+    host: str
+    models: list[str] = []
+    error: str | None = None
+    note: str | None = None

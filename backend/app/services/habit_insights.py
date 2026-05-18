@@ -27,11 +27,12 @@ Rules:
 - Note day-of-week patterns if visible
 - Max 2 sentences per insight
 - Output ONLY a numbered list — no headers, no preamble, no summary line
+- Use **bold** (markdown double-asterisks) around habit names and key numbers so they stand out at a glance
 
 Example:
-1. Morning Run is your strongest habit at 87% — great consistency on weekdays.
-2. Evening Reading drops off on Fridays; only 1 of the last 4 Fridays were logged.
-3. Meditation streak sits at 4 days — your longest this month was 9."""
+1. **Morning Run** is your strongest habit at **87%** — great consistency on weekdays.
+2. **Evening Reading** drops off on Fridays; only 1 of the last 4 Fridays were logged.
+3. **Meditation** streak sits at **4 days** — your longest this month was 9."""
 
 
 def _schedule_days(habit: Habit, start: date, end: date) -> list[date]:

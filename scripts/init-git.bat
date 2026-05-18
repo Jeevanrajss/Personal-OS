@@ -17,7 +17,7 @@ git commit -m "Week 1: project scaffold - FastAPI + React PWA + LM Studio + SQLC
 
 echo.
 echo [init-git] Done. Create a private repo and push:
-echo   git remote add origin git@github.com:^<you^>/personal-os.git
+echo   git remote add origin git@github.com:^<you^>/north-os.git
 echo   git push -u origin main
 
 endlocal

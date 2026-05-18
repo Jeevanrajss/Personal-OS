@@ -2,10 +2,6 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
-/**
- * Lightweight tag cloud — top N tags in the last 30 days sized by frequency.
- * Not interactive for v1 (no filter), purely a reflection surface.
- */
 export function TagCloud() {
   const { data } = useQuery({
     queryKey: ['stats', 30],
@@ -18,33 +14,74 @@ export function TagCloud() {
     if (tags.length === 0) return [];
     const max = Math.max(...tags.map((t) => t.count));
     return tags.map((t) => {
-      // Map count → size bucket (4 steps).
       const ratio = t.count / max;
-      let sizeClass = 'text-[11px]';
-      if (ratio > 0.75) sizeClass = 'text-base';
-      else if (ratio > 0.5) sizeClass = 'text-sm';
-      else if (ratio > 0.25) sizeClass = 'text-xs';
-      return { ...t, sizeClass };
+      // size bucket: 1 = small, 2 = medium, 3 = large
+      const size = ratio > 0.75 ? 3 : ratio > 0.5 ? 2 : 1;
+      return { ...t, size };
     });
   }, [data]);
 
+  const total     = sized.reduce((s, t) => s + t.count, 0);
+  const uniqueCnt = sized.length;
+
+  function chipStyle(size: number) {
+    if (size === 3) return {
+      fontSize: 14,
+      background: 'rgba(184,165,255,0.14)',
+      color: 'white',
+      border: '1px solid rgba(184,165,255,0.32)',
+    };
+    if (size === 2) return {
+      fontSize: 13,
+      background: 'rgba(184,165,255,0.08)',
+      color: 'var(--primary-300)',
+      border: '1px solid rgba(184,165,255,0.18)',
+    };
+    return {
+      fontSize: 12,
+      background: 'var(--glass-bg)',
+      color: 'var(--fg-2)',
+      border: '1px solid var(--border-default)',
+    };
+  }
+
   return (
-    <div className="card">
-      <div className="card-title">Tags — last 30 days</div>
+    <div className="card" style={{ padding: 20 }}>
+      {/* Header */}
+      <h3 style={{ margin: '0 0 14px', font: '500 12px/1 var(--font-sans)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-4)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        Top tags
+        <span style={{ color: 'var(--fg-3)', fontSize: 11, letterSpacing: '0.06em', textTransform: 'none', fontWeight: 400 }}>30 days</span>
+      </h3>
+
       {sized.length === 0 ? (
-        <div className="text-xs text-ink-600">No tags yet in the window.</div>
+        <div style={{ color: 'var(--fg-4)', fontSize: 13 }}>No tags yet in the window.</div>
       ) : (
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          {sized.map((t) => (
-            <span
-              key={t.name}
-              title={`${t.count} day${t.count === 1 ? '' : 's'}`}
-              className={`${t.sizeClass} text-ink-400 hover:text-accent transition-colors`}
-            >
-              {t.name}
-            </span>
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {sized.map((t) => (
+              <span
+                key={t.name}
+                title={`${t.count} day${t.count === 1 ? '' : 's'}`}
+                style={{
+                  ...chipStyle(t.size),
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 10px', borderRadius: 8,
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 500,
+                  transition: 'border-color var(--dur) var(--ease)',
+                }}
+              >
+                {t.name}
+                <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>{t.count}</span>
+              </span>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--fg-4)' }}>
+            <span>{total} total · {uniqueCnt} unique</span>
+          </div>
+        </>
       )}
     </div>
   );

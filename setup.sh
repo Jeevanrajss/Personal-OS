@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Personal OS — one-command setup + launch
+# North OS — one-command setup + launch
 # =============================================================================
 # Usage (after cloning):
 #   bash setup.sh          # install deps + start the app
@@ -18,10 +18,10 @@ cd "$ROOT_DIR"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 
-info()    { echo -e "${CYAN}[personal-os]${RESET} $*"; }
-success() { echo -e "${GREEN}[personal-os]${RESET} $*"; }
-warn()    { echo -e "${YELLOW}[personal-os]${RESET} $*"; }
-error()   { echo -e "${RED}[personal-os] ERROR:${RESET} $*" >&2; exit 1; }
+info()    { echo -e "${CYAN}[north-os]${RESET} $*"; }
+success() { echo -e "${GREEN}[north-os]${RESET} $*"; }
+warn()    { echo -e "${YELLOW}[north-os]${RESET} $*"; }
+error()   { echo -e "${RED}[north-os] ERROR:${RESET} $*" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}━━━  $*${RESET}"; }
 
 SETUP_ONLY=false
@@ -131,7 +131,7 @@ if [[ "$START_ONLY" == false ]]; then
   # =============================================================================
   echo ""
   echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════╗${RESET}"
-  echo -e "${GREEN}${BOLD}║          Personal OS — setup complete! 🎉         ║${RESET}"
+  echo -e "${GREEN}${BOLD}║          North OS — setup complete! 🎉         ║${RESET}"
   echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════╝${RESET}"
   echo ""
 
@@ -146,7 +146,7 @@ fi  # end of setup block
 # =============================================================================
 # 6. START SERVERS
 # =============================================================================
-step "Launching Personal OS"
+step "Launching North OS"
 
 # Verify venv exists (in case --start was passed without --setup)
 if [[ ! -d "backend/.venv" ]]; then
@@ -201,7 +201,7 @@ sleep 2
 URL="http://127.0.0.1:5173"
 echo ""
 echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════╗${RESET}"
-echo -e "${GREEN}${BOLD}║   Personal OS is running!                         ║${RESET}"
+echo -e "${GREEN}${BOLD}║   North OS is running!                         ║${RESET}"
 echo -e "${GREEN}${BOLD}║                                                   ║${RESET}"
 echo -e "${GREEN}${BOLD}║   App  →  ${RESET}${BOLD}${URL}${GREEN}${BOLD}        ║${RESET}"
 echo -e "${GREEN}${BOLD}║   API  →  http://127.0.0.1:8000/docs              ║${RESET}"

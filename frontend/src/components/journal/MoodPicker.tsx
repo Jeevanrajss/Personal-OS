@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, MAX_MOODS_PER_DAY, type MoodCode } from '@/lib/api';
-import { cn } from '@/lib/cn';
 
 type Props = {
   selected: string[];
@@ -8,27 +7,11 @@ type Props = {
   disabled?: boolean;
 };
 
-/**
- * Color a mood tile by its valence. Negative = warm red/amber, positive =
- * green, neutral = ink gray. Uses inline tailwind classes, no magic numbers.
- */
-function valenceClasses(valence: number, active: boolean): string {
-  if (active) {
-    if (valence >= 2) return 'bg-emerald-500/30 border-emerald-400 text-emerald-50';
-    if (valence === 1) return 'bg-emerald-500/20 border-emerald-500/60 text-emerald-100';
-    if (valence === -1) return 'bg-amber-500/20 border-amber-500/60 text-amber-100';
-    if (valence <= -2) return 'bg-rose-500/25 border-rose-400 text-rose-50';
-    return 'bg-ink-800 border-ink-600 text-ink-50';
-  }
-  // inactive
-  return 'bg-ink-950 border-ink-800 text-ink-400 hover:border-ink-600 hover:text-ink-100';
-}
-
 export function MoodPicker({ selected, onChange, disabled }: Props) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['moods'],
     queryFn: api.journal.listMoods,
-    staleTime: 1000 * 60 * 60, // 1h — reference data, rarely changes
+    staleTime: 1000 * 60 * 60,
   });
 
   function toggle(code: string) {
@@ -39,25 +22,20 @@ export function MoodPicker({ selected, onChange, disabled }: Props) {
       return;
     }
     if (selected.length >= MAX_MOODS_PER_DAY) {
-      // Replace the oldest — feels nicer than silently refusing.
       onChange([...selected.slice(1), code]);
       return;
     }
     onChange([...selected, code]);
   }
 
-  if (isLoading) {
-    return <div className="text-sm text-ink-400">Loading moods…</div>;
-  }
-  if (error || !data) {
-    return <div className="text-sm text-red-400">Couldn't load moods.</div>;
-  }
+  if (isLoading) return <div className="text-xs text-white/40">Loading moods…</div>;
+  if (error || !data) return <div className="text-xs text-red-400">Couldn't load moods.</div>;
 
   const sorted: MoodCode[] = [...data].sort((a, b) => a.sort_order - b.sort_order);
 
   return (
     <div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {sorted.map((m) => {
           const active = selected.includes(m.code);
           return (
@@ -66,23 +44,38 @@ export function MoodPicker({ selected, onChange, disabled }: Props) {
               type="button"
               onClick={() => toggle(m.code)}
               disabled={disabled}
-              className={cn(
-                'flex flex-col items-center gap-1 rounded-md border px-2 py-2.5 text-xs transition-colors',
-                valenceClasses(m.valence, active),
-                disabled && 'opacity-50 cursor-not-allowed',
-              )}
               aria-pressed={active}
+              className="inline-flex items-center gap-1.5 rounded-full text-xs font-medium border transition-all duration-150"
+              style={{
+                height: 30,
+                padding: '0 12px 0 10px',
+                ...(active
+                  ? {
+                      background: 'linear-gradient(135deg, rgba(139,124,255,0.18), rgba(139,124,255,0.08))',
+                      borderColor: 'rgba(139,124,255,0.5)',
+                      color: 'white',
+                      boxShadow: '0 0 0 3px rgba(139,124,255,0.10)',
+                    }
+                  : {
+                      background: 'rgba(255,255,255,0.02)',
+                      borderColor: 'rgba(255,255,255,0.08)',
+                      color: '#A0A9BC',
+                    }),
+                opacity: disabled ? 0.5 : 1,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                fontSize: '12.5px',
+              }}
             >
-              <span className="text-lg leading-none">{m.emoji}</span>
-              <span className="font-medium">{m.label}</span>
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{m.emoji}</span>
+              <span>{m.label}</span>
             </button>
           );
         })}
       </div>
-      <div className="mt-2 text-xs text-ink-600">
-        Up to {MAX_MOODS_PER_DAY} moods per day.
+      <div className="mt-2" style={{ fontSize: 11, color: 'rgba(255,255,255,0.30)' }}>
+        Pick up to {MAX_MOODS_PER_DAY}
         {selected.length > 0 && (
-          <span className="ml-1 text-ink-400">
+          <span style={{ marginLeft: 4, color: 'rgba(255,255,255,0.50)' }}>
             {selected.length}/{MAX_MOODS_PER_DAY} selected
           </span>
         )}

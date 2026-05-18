@@ -9,22 +9,26 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import init_db
-from app.routers import accounts, ai, finance, habit, health, journal, settings, subscription
-from app.routers import import_router
+from app.routers import accounts, ai, finance, habit, health, journal, settings, subscription, notifications
+from app.routers import import_router, sms
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
 )
-log = logging.getLogger("personal-os")
+log = logging.getLogger("north-os")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Booting Personal OS backend")
+    log.info("Booting North OS backend")
     init_db()
     log.info("DB ready")
+    from app.scheduler import start_scheduler
+    start_scheduler()
     yield
+    from app.scheduler import stop_scheduler
+    stop_scheduler()
     log.info("Shutting down")
 
 
@@ -58,6 +62,8 @@ def create_app() -> FastAPI:
     app.include_router(accounts.router)
     app.include_router(settings.router)
     app.include_router(import_router.router)
+    app.include_router(sms.router)
+    app.include_router(notifications.router)
 
     @app.get("/")
     def root():

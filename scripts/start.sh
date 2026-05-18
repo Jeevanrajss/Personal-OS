@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Personal OS launcher — macOS / Linux.
+# North OS launcher — macOS / Linux.
 # Starts backend + frontend. Run setup.sh first if this is a fresh clone.
 set -euo pipefail
 

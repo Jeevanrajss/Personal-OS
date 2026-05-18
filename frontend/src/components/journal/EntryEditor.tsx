@@ -44,7 +44,7 @@ export function EntryEditor({ entry, onSave, autoFocus }: Props) {
         Placeholder.configure({
           placeholder: 'Start writing…  (try # for heading, - for bullet, > for quote)',
           emptyEditorClass:
-            'before:content-[attr(data-placeholder)] before:text-ink-600 before:float-left before:h-0 before:pointer-events-none',
+            'before:content-[attr(data-placeholder)] before:text-ink-400 before:float-left before:h-0 before:pointer-events-none',
         }),
       ],
       content: initialDoc,
@@ -97,8 +97,8 @@ export function EntryEditor({ entry, onSave, autoFocus }: Props) {
       <div className="px-3 py-2.5">
         <EditorContent editor={editor} />
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-ink-900 px-3 py-2">
-        <div className="text-xs text-ink-600">
+      <div className="flex items-center justify-between gap-2 border-t border-white/5 px-3 py-2">
+        <div className="text-xs text-ink-400">
           {saving ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved'}
         </div>
         <button

@@ -27,5 +27,5 @@ git commit -m "Week 1: project scaffold
 
 echo
 echo "[init-git] Done. Create a private repo on GitHub/Gitea and push:"
-echo "  git remote add origin git@github.com:<you>/personal-os.git"
+echo "  git remote add origin git@github.com:<you>/north-os.git"
 echo "  git push -u origin main"

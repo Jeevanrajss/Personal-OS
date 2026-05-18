@@ -34,7 +34,7 @@ export function HabitDowChart({ dow }: Props) {
               <span
                 className={cn(
                   'w-8 tabular-nums',
-                  empty ? 'text-ink-600' : 'text-ink-400',
+                  empty ? 'text-ink-400' : 'text-ink-400',
                 )}
               >
                 {label}
@@ -53,7 +53,7 @@ export function HabitDowChart({ dow }: Props) {
               <span
                 className={cn(
                   'w-20 text-right tabular-nums',
-                  empty ? 'text-ink-600' : 'text-ink-400',
+                  empty ? 'text-ink-400' : 'text-ink-400',
                 )}
               >
                 {empty

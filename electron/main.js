@@ -340,13 +340,18 @@ autoUpdater.on('update-available', (info) => {
     'Downloading in the background — you\'ll be notified when it\'s ready to install.',
   ].filter(Boolean).join('\n');
 
-  dialog.showMessageBox(mainWindow || BrowserWindow.getFocusedWindow(), {
+  const win = (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null)
+    ?? BrowserWindow.getFocusedWindow()
+    ?? BrowserWindow.getAllWindows()[0];
+  const msgOpts = {
     type: 'info',
     title: 'Update Available',
     message: `Personal OS ${info.version} is available`,
     detail,
     buttons: ['OK'],
-  });
+  };
+  if (win) dialog.showMessageBox(win, msgOpts);
+  else dialog.showMessageBox(msgOpts);
 });
 
 autoUpdater.on('update-not-available', () => {
@@ -382,7 +387,10 @@ autoUpdater.on('update-downloaded', (info) => {
     'Restart now to apply the update.',
   ].filter(Boolean).join('\n');
 
-  const choice = dialog.showMessageBoxSync(mainWindow || BrowserWindow.getFocusedWindow(), {
+  const win2 = (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null)
+    ?? BrowserWindow.getFocusedWindow()
+    ?? BrowserWindow.getAllWindows()[0];
+  const dlOpts = {
     type: 'info',
     title: 'Update Ready to Install',
     message: `Personal OS ${info.version} downloaded`,
@@ -390,7 +398,10 @@ autoUpdater.on('update-downloaded', (info) => {
     buttons: ['Restart Now', 'Later'],
     defaultId: 0,
     cancelId: 1,
-  });
+  };
+  const choice = win2
+    ? dialog.showMessageBoxSync(win2, dlOpts)
+    : dialog.showMessageBoxSync(dlOpts);
 
   if (choice === 0) autoUpdater.quitAndInstall();
 });

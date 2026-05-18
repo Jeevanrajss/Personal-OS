@@ -1,6 +1,6 @@
 {
   "name": "personal-os",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Personal OS — your private life dashboard",
   "main": "main.js",
   "private": true,
@@ -38,6 +38,7 @@
         "filter": ["**/*"]
       }
     ],
+    "artifactName": "Personal-OS-${version}-${arch}.${ext}",
     "mac": {
       "target": [
         { "target": "dmg", "arch": ["arm64", "x64"] }
@@ -51,7 +52,8 @@
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "artifactName": "Personal-OS-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

@@ -63,8 +63,13 @@ jobs:
           files: |
             electron/dist/*.dmg
             electron/dist/latest-mac.yml
-          # Auto-generate release notes from commits since last tag
           generate_release_notes: true
+          body: |
+            ## Installing on macOS
+
+            > **First time only:** macOS may show a "damaged" warning because the app isn't yet code-signed.
+            > **Fix:** Right-click the `.dmg` → **Open** → click **Open** in the dialog. You only need to do this once.
+            > After that, updates install automatically with no warnings.
 
   # ── Windows x64 ──────────────────────────────────────────────────────────────
   build-win:

@@ -296,22 +296,80 @@ ipcMain.handle('activate', async (_event, key) => {
 
 function checkForUpdates() {
   if (IS_DEV) return;
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.checkForUpdates();
 }
 
-autoUpdater.on('update-available', () => {
-  console.log('[updater] Update available — downloading…');
+autoUpdater.on('update-available', (info) => {
+  console.log('[updater] Update available:', info.version);
+
+  // Strip HTML tags from release notes (GitHub returns HTML)
+  const rawNotes = typeof info.releaseNotes === 'string'
+    ? info.releaseNotes
+    : Array.isArray(info.releaseNotes)
+      ? info.releaseNotes.map((r) => r.note || '').join('\n')
+      : '';
+  const notes = rawNotes.replace(/<[^>]+>/g, '').trim();
+
+  const detail = [
+    `Version ${info.version} is available (you have ${app.getVersion()}).`,
+    '',
+    notes ? `What's new:\n${notes}` : '',
+    '',
+    'Downloading in the background — you\'ll be notified when it\'s ready to install.',
+  ].filter(Boolean).join('\n');
+
+  dialog.showMessageBox(mainWindow || BrowserWindow.getFocusedWindow(), {
+    type: 'info',
+    title: 'Update Available',
+    message: `Personal OS ${info.version} is available`,
+    detail,
+    buttons: ['OK'],
+  });
 });
 
-autoUpdater.on('update-downloaded', () => {
-  const choice = dialog.showMessageBoxSync({
+autoUpdater.on('update-not-available', () => {
+  console.log('[updater] App is up to date');
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  const pct = Math.round(progress.percent);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setProgressBar(progress.percent / 100);
+    mainWindow.setTitle(`Personal OS — Downloading update ${pct}%`);
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  // Reset progress bar
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setProgressBar(-1);
+    mainWindow.setTitle('Personal OS');
+  }
+
+  // Strip HTML from release notes
+  const rawNotes = typeof info.releaseNotes === 'string'
+    ? info.releaseNotes
+    : Array.isArray(info.releaseNotes)
+      ? info.releaseNotes.map((r) => r.note || '').join('\n')
+      : '';
+  const notes = rawNotes.replace(/<[^>]+>/g, '').trim();
+
+  const detail = [
+    notes ? `What's new in ${info.version}:\n${notes}` : `Version ${info.version} is ready.`,
+    '',
+    'Restart now to apply the update.',
+  ].filter(Boolean).join('\n');
+
+  const choice = dialog.showMessageBoxSync(mainWindow || BrowserWindow.getFocusedWindow(), {
     type: 'info',
-    title: 'Update Ready',
-    message: 'A new version of Personal OS has been downloaded.',
-    detail: 'Restart now to apply the update?',
+    title: 'Update Ready to Install',
+    message: `Personal OS ${info.version} downloaded`,
+    detail,
     buttons: ['Restart Now', 'Later'],
     defaultId: 0,
+    cancelId: 1,
   });
+
   if (choice === 0) autoUpdater.quitAndInstall();
 });
 

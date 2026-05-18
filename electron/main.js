@@ -93,15 +93,23 @@ function startBackend() {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
+    // Collect stderr so we can show it if startup fails
+    let stderrBuffer = '';
     backendProcess.stdout.on('data', (d) => process.stdout.write(`[backend] ${d}`));
-    backendProcess.stderr.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+    backendProcess.stderr.on('data', (d) => {
+      process.stderr.write(`[backend] ${d}`);
+      stderrBuffer += d.toString();
+      if (stderrBuffer.length > 4000) stderrBuffer = stderrBuffer.slice(-4000);
+    });
 
     backendProcess.on('error', (err) => {
       console.error('[electron] Backend process error:', err);
       reject(err);
     });
 
+    let earlyExit = false;
     backendProcess.on('exit', (code, signal) => {
+      earlyExit = true;
       console.log(`[electron] Backend exited — code=${code} signal=${signal}`);
       if (mainWindow && !mainWindow.isDestroyed()) {
         dialog.showErrorBox(
@@ -117,6 +125,17 @@ function startBackend() {
 
     const poll = setInterval(async () => {
       attempts++;
+
+      // If backend already exited, stop polling immediately
+      if (earlyExit) {
+        clearInterval(poll);
+        const detail = stderrBuffer.trim()
+          ? `\n\nError output:\n${stderrBuffer.trim().slice(-1500)}`
+          : '';
+        reject(new Error(`Backend process exited before becoming ready.${detail}`));
+        return;
+      }
+
       try {
         const res = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(800) });
         if (res.ok) {
@@ -128,7 +147,10 @@ function startBackend() {
 
       if (attempts >= MAX_ATTEMPTS) {
         clearInterval(poll);
-        reject(new Error('Backend did not start within 30 seconds'));
+        const detail = stderrBuffer.trim()
+          ? `\n\nLast output:\n${stderrBuffer.trim().slice(-1500)}`
+          : '';
+        reject(new Error(`Backend did not start within 30 seconds.${detail}`));
       }
     }, 500);
   });

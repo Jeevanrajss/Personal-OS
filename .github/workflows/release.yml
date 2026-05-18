@@ -55,7 +55,7 @@ jobs:
         run: |
           cd electron
           npm ci
-          npx electron-builder --mac --arch arm64
+          npx electron-builder --mac --arm64
 
       - name: Upload macOS assets to GitHub Release
         uses: softprops/action-gh-release@v2

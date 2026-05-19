@@ -50,8 +50,10 @@ def _run_budget_warnings() -> None:
     from app.models.setting import Setting
     from app.services.notification_service import check_budget_warnings
     with SessionLocal() as db:
+        # Budget warnings are opt-IN (default disabled). Only run when explicitly
+        # set to "true" — treat missing setting the same as "false".
         s = db.query(Setting).filter(Setting.key == "notif.budget_warning_enabled").first()
-        if s and s.value == "false":
+        if not s or s.value != "true":
             return
         check_budget_warnings(db)
 

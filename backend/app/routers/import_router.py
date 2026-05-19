@@ -186,6 +186,9 @@ async def import_preview(
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    # Guard against excessively large uploads (50 MB limit)
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 50 MB.")
 
     # Convert XLS / XLSX / PDF → CSV bytes so the rest of the pipeline is unchanged
     filename = file.filename or ""
@@ -268,6 +271,11 @@ def import_confirm(body: ImportConfirmRequest, db: Session = Depends(get_db)):
     skipped = 0
     batch_id = str(uuid.uuid4())
 
+    # Use profile currency setting; fall back to INR
+    from app.models.setting import Setting as _Setting
+    _cur_row = db.query(_Setting).filter(_Setting.key == "profile.currency").first()
+    import_currency = (_cur_row.value or "INR") if _cur_row else "INR"
+
     for row in body.rows:
         if not row.include:
             skipped += 1
@@ -275,7 +283,7 @@ def import_confirm(body: ImportConfirmRequest, db: Session = Depends(get_db)):
         t = Transaction(
             type=row.tx_type,
             amount=row.amount,
-            currency="INR",
+            currency=import_currency,
             date=date_cls.fromisoformat(row.date),
             category=row.category,
             account=body.account_name,

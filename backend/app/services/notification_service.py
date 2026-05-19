@@ -277,10 +277,11 @@ def check_budget_warnings(db: Session) -> int:
         if pct < 0.8:
             continue
 
-        # One warning per category per month
+        # One warning per category per month.
+        # Use a precise JSON key match so "Food" doesn't false-match "Food & Dining".
         already = db.query(Notification).filter(
             Notification.type == "budget_warning",
-            Notification.data.contains(cat),
+            Notification.data.contains(f'"category": "{cat}"'),
             sqlfunc.strftime("%Y-%m", Notification.created_at) == f"{y}-{m:02d}",
         ).first()
         if already:

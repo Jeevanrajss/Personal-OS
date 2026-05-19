@@ -1302,6 +1302,7 @@ function NotificationSettingsPanel() {
   const [briefingEnabled, setBriefingEnabled] = useState(true);
   const [briefingTime,    setBriefingTime]    = useState('08:30');
   const [habitEnabled,    setHabitEnabled]    = useState(true);
+  const [habitTime,       setHabitTime]       = useState('21:00');
   const [subEnabled,      setSubEnabled]      = useState(true);
   const [subDays,         setSubDays]         = useState('3');
   const [budgetEnabled,   setBudgetEnabled]   = useState(false);
@@ -1329,6 +1330,7 @@ function NotificationSettingsPanel() {
     setBriefingEnabled((settings['notif.morning_briefing_enabled'] as string) !== 'false');
     setBriefingTime((settings['notif.morning_briefing_time'] as string) || '08:30');
     setHabitEnabled((settings['notif.habit_reminder_enabled'] as string) !== 'false');
+    setHabitTime((settings['notif.habit_reminder_time'] as string) || '21:00');
     setSubEnabled((settings['notif.sub_alert_enabled'] as string) !== 'false');
     setSubDays((settings['notif.sub_alert_days_before'] as string) || '3');
     setBudgetEnabled((settings['notif.budget_warning_enabled'] as string) === 'true');
@@ -1342,13 +1344,14 @@ function NotificationSettingsPanel() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => { handleSave(); }, 600);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [briefingEnabled, briefingTime, habitEnabled, subEnabled, subDays, budgetEnabled, quietStart, quietEnd]);
+  }, [briefingEnabled, briefingTime, habitEnabled, habitTime, subEnabled, subDays, budgetEnabled, quietStart, quietEnd]);
 
   async function handleSave() {
     await api.settings.update({
       'notif.morning_briefing_enabled': briefingEnabled ? 'true' : 'false',
       'notif.morning_briefing_time':    briefingTime,
       'notif.habit_reminder_enabled':   habitEnabled ? 'true' : 'false',
+      'notif.habit_reminder_time':      habitTime,
       'notif.sub_alert_enabled':        subEnabled ? 'true' : 'false',
       'notif.sub_alert_days_before':    subDays,
       'notif.budget_warning_enabled':   budgetEnabled ? 'true' : 'false',
@@ -1470,10 +1473,18 @@ function NotificationSettingsPanel() {
               Habit reminders
             </div>
             <div style={{ fontSize: 13, color: 'var(--fg-4)' }}>
-              One ping per day if there are still unchecked habits at {fmt12('21:00')}.
+              One ping per day if there are still unchecked habits at {fmt12(habitTime)}.
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 24, flexShrink: 0 }}>
+            <input
+              type="time"
+              value={habitTime}
+              disabled={!habitEnabled}
+              onChange={(e) => setHabitTime(e.target.value)}
+              className={timeInputCls}
+              style={{ opacity: habitEnabled ? 1 : 0.4 }}
+            />
             <NotifToggle on={habitEnabled} onChange={setHabitEnabled} />
           </div>
         </div>

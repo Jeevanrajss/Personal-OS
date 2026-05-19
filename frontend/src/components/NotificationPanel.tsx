@@ -4,10 +4,12 @@ import { Bell, CheckCheck, Trash2, X } from 'lucide-react';
 import { api, type NotificationItem } from '@/lib/api';
 
 const TYPE_ICON: Record<string, string> = {
-  habit_reminder: '🔥',
-  sub_alert: '🔄',
-  finance_alert: '💳',
-  system: '🖥️',
+  morning_briefing: '☀️',
+  habit_reminder:   '🔥',
+  sub_alert:        '🔄',
+  budget_warning:   '💰',
+  finance_alert:    '💳',
+  system:           '🖥️',
 };
 
 function timeAgo(iso: string): string {

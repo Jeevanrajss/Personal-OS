@@ -1846,6 +1846,7 @@ export function Settings() {
   // ── Wipe data state ────────────────────────────────────────────────
   const [wipeStep, setWipeStep] = useState(0); // 0=closed,1=warn,2=effects,3=confirm
   const [wipeConfirmText, setWipeConfirmText] = useState('');
+  const [wipeSuccess, setWipeSuccess] = useState(false);
 
   const wipeMut = useMutation({
     mutationFn: api.data.wipe,
@@ -1853,8 +1854,24 @@ export function Settings() {
       qc.invalidateQueries(); // clear all cached query data
       setWipeStep(0);
       setWipeConfirmText('');
+      setWipeSuccess(true);
+      setTimeout(() => setWipeSuccess(false), 4000);
     },
   });
+
+  // Close modal on Escape (but not while the request is in-flight)
+  useEffect(() => {
+    if (wipeStep === 0) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !wipeMut.isPending) {
+        wipeMut.reset();
+        setWipeStep(0);
+        setWipeConfirmText('');
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [wipeStep, wipeMut.isPending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const preset: ProviderPreset | undefined = providers[provider];
   const suggestedChat = [
@@ -2354,7 +2371,7 @@ export function Settings() {
               </div>
               <button
                 type="button"
-                onClick={() => setWipeStep(1)}
+                onClick={() => { wipeMut.reset(); setWipeStep(1); }}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 7,
                   padding: '7px 16px', borderRadius: 8,
@@ -2373,6 +2390,19 @@ export function Settings() {
               </button>
             </div>
           </div>
+
+          {/* Success banner */}
+          {wipeSuccess && (
+            <div style={{
+              marginTop: 12, padding: '10px 16px', borderRadius: 8,
+              background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 13, color: '#86efac',
+            }}>
+              <Check style={{ width: 14, height: 14, flexShrink: 0 }} />
+              All data wiped successfully. Your settings have been preserved.
+            </div>
+          )}
         </section>
 
         {/* ── Wipe data modal (3-step) ──────────────────────────────────── */}
@@ -2384,7 +2414,7 @@ export function Settings() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: 24,
             }}
-            onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+            onClick={() => { if (wipeMut.isPending) return; wipeMut.reset(); setWipeStep(0); setWipeConfirmText(''); }}
           >
             <div
               onClick={e => e.stopPropagation()}
@@ -2434,7 +2464,7 @@ export function Settings() {
                     <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                       <button
                         type="button"
-                        onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+                        onClick={() => { wipeMut.reset(); setWipeStep(0); setWipeConfirmText(''); }}
                         style={{
                           padding: '8px 18px', borderRadius: 8, fontSize: 13,
                           color: 'var(--fg-3)', background: 'transparent',
@@ -2482,7 +2512,7 @@ export function Settings() {
                     <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                       <button
                         type="button"
-                        onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+                        onClick={() => { wipeMut.reset(); setWipeStep(0); setWipeConfirmText(''); }}
                         style={{
                           padding: '8px 18px', borderRadius: 8, fontSize: 13,
                           color: 'var(--fg-3)', background: 'transparent',
@@ -2533,7 +2563,7 @@ export function Settings() {
                     <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                       <button
                         type="button"
-                        onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+                        onClick={() => { wipeMut.reset(); setWipeStep(0); setWipeConfirmText(''); }}
                         style={{
                           padding: '8px 18px', borderRadius: 8, fontSize: 13,
                           color: 'var(--fg-3)', background: 'transparent',
@@ -2553,8 +2583,8 @@ export function Settings() {
                           background: wipeConfirmText === 'delete my data'
                             ? 'rgba(239,68,68,0.8)' : 'rgba(239,68,68,0.12)',
                           border: '1px solid rgba(239,68,68,0.5)',
-                          cursor: wipeConfirmText !== 'delete my data' ? 'not-allowed' : 'pointer',
-                          opacity: wipeConfirmText !== 'delete my data' ? 0.6 : 1,
+                          cursor: (wipeConfirmText !== 'delete my data' || wipeMut.isPending) ? 'not-allowed' : 'pointer',
+                          opacity: (wipeConfirmText !== 'delete my data' || wipeMut.isPending) ? 0.6 : 1,
                           transition: 'all 0.15s',
                         }}
                       >

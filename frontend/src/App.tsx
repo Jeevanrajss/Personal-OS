@@ -5,6 +5,7 @@ import { Topbar } from '@/components/Topbar';
 import { FloatingChat } from '@/components/FloatingChat';
 import { LockScreen, getLockHash } from '@/components/LockScreen';
 import { Landing } from '@/routes/Landing';
+import { Tutorials } from '@/routes/Tutorials';
 import { Dashboard } from '@/routes/Dashboard';
 import { Journal } from '@/routes/Journal';
 import { Finance } from '@/routes/Finance';
@@ -90,6 +91,11 @@ export default function App() {
       return <Routes><Route path="/" element={<Landing />} /></Routes>;
     }
     return <Navigate to="/app" replace />;
+  }
+
+  // Tutorials page — always available on Netlify
+  if (SHOW_LANDING && location.pathname === '/tutorials') {
+    return <Routes><Route path="/tutorials" element={<Tutorials />} /></Routes>;
   }
 
   // App shell wraps /app/* routes

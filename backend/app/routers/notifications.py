@@ -25,10 +25,19 @@ class NotificationOut(BaseModel):
 
 
 def _out(n: Notification) -> NotificationOut:
+    # SQLite stores func.now() as UTC but the datetime object is naive (no tzinfo).
+    # Appending "Z" (≡ +00:00) ensures the browser parses it correctly instead of
+    # treating it as local time, which would show e.g. "5h ago" for IST users.
+    if n.created_at:
+        ts = n.created_at.isoformat()
+        if not ts.endswith("Z") and "+" not in ts:
+            ts += "Z"
+    else:
+        ts = ""
     return NotificationOut(
         id=n.id, type=n.type, title=n.title, body=n.body,
         data=n.data_dict(), read=n.read,
-        created_at=n.created_at.isoformat() if n.created_at else "",
+        created_at=ts,
     )
 
 

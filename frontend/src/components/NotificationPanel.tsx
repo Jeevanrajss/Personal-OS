@@ -29,10 +29,12 @@ function requestBrowserPermission() {
 // Auto-request on first load so the OS dialog appears without needing Settings
 requestBrowserPermission();
 
-function fireBrowserNotification(title: string, body: string, type: string) {
+function fireBrowserNotification(title: string, body: string, type: string, id: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const icon = '/icon-192.png';
-  new Notification(title, { body, icon, tag: type });
+  // Use the notification's own id as tag so duplicate OS popups are deduplicated.
+  // silent: true suppresses the OS sound — the app plays its own audio instead.
+  new Notification(title, { body, icon, tag: id, silent: true });
 }
 
 let _notifAudio: HTMLAudioElement | null = null;
@@ -56,6 +58,9 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef<number>(-1);
+  // Tracks every notification ID we have already fired a browser popup for.
+  // Populated silently on first load so existing unread items never re-fire.
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
   // Poll unread count every 30s
   const { data: countData } = useQuery({
@@ -75,14 +80,32 @@ export function NotificationBell() {
 
   const unread = countData?.count ?? 0;
 
-  // Fire browser notification + sound when count increases
+  // Fire browser notification + sound only for genuinely new notifications.
   useEffect(() => {
-    if (unread > prevCountRef.current && prevCountRef.current >= 0) {
-      playNotificationSound();
-      // Fetch latest to get titles for browser popups
+    if (prevCountRef.current === -1) {
+      // First poll — silently seed seenIdsRef with all current unread IDs
+      // so they never trigger popups on subsequent polls.
+      if (unread > 0) {
+        api.notifications.list().then((notifs) => {
+          notifs.filter((n) => !n.read).forEach((n) => seenIdsRef.current.add(n.id));
+        }).catch(() => {});
+      }
+      prevCountRef.current = unread;
+      return;
+    }
+
+    if (unread > prevCountRef.current) {
+      // Count went up — fetch the full list and fire only for IDs we haven't seen yet.
       api.notifications.list().then((notifs) => {
-        const newOnes = notifs.filter((n) => !n.read).slice(0, 3);
-        newOnes.forEach((n) => fireBrowserNotification(n.title, n.body, n.type));
+        const newOnes = notifs.filter((n) => !n.read && !seenIdsRef.current.has(n.id));
+        if (newOnes.length > 0) {
+          playNotificationSound();
+          newOnes.slice(0, 3).forEach((n) => {
+            fireBrowserNotification(n.title, n.body, n.type, n.id);
+          });
+        }
+        // Mark ALL current unread as seen so they won't fire again later.
+        notifs.filter((n) => !n.read).forEach((n) => seenIdsRef.current.add(n.id));
       }).catch(() => {});
     }
     prevCountRef.current = unread;

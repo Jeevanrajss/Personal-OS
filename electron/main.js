@@ -353,13 +353,144 @@ function semverGt(a, b) {
   return false;
 }
 
-// ── macOS updater (GitHub API — bypasses Squirrel.Mac signature validation) ───
+// ── macOS updater — downloads & installs the DMG internally ──────────────────
 //
-// Squirrel.Mac validates code signatures of downloaded updates. Unsigned builds
-// fail this check because Electron's own framework components are pre-signed
-// by GitHub, creating an inconsistency that Squirrel rejects.
-// Solution: skip Squirrel entirely on macOS. Check GitHub releases directly,
-// show a dialog, and open the DMG download link in the browser.
+// Browser-downloaded DMGs get the com.apple.quarantine flag → Gatekeeper blocks.
+// Downloads initiated by the running app do NOT get quarantined.
+// So we: fetch DMG ourselves → mount → ditto to Applications → strip xattr →
+// unmount → relaunch. No xattr command needed by the user, ever.
+
+const { exec } = require('child_process');
+const os       = require('os');
+
+function execAsync(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(Object.assign(err, { stdout, stderr }));
+      else resolve(stdout);
+    });
+  });
+}
+
+async function downloadDmg(url, destPath, onProgress) {
+  updaterLog('info', `[mac] Downloading ${url}`);
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'PersonalOS-Updater' },
+    signal: AbortSignal.timeout(600_000), // 10 min
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} downloading DMG`);
+
+  const total    = parseInt(res.headers.get('content-length') || '0', 10);
+  const writer   = fs.createWriteStream(destPath);
+  const reader   = res.body.getReader();
+  let received   = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      await new Promise((res, rej) => writer.write(value, (e) => e ? rej(e) : res()));
+      received += value.length;
+      if (total > 0 && onProgress) onProgress(received / total);
+    }
+  } finally {
+    await new Promise((res, rej) => writer.close((e) => e ? rej(e) : res()));
+  }
+}
+
+async function installMacUpdate(dmgUrl, version) {
+  const win     = getActiveWindow();
+  const tmpDmg  = path.join(os.tmpdir(), `personal-os-${version}.dmg`);
+
+  // ── 1. Download ────────────────────────────────────────────────────
+  try {
+    await downloadDmg(dmgUrl, tmpDmg, (pct) => {
+      const p = Math.round(pct * 100);
+      updaterLog('info', `[mac] Download ${p}%`);
+      if (win && !win.isDestroyed()) {
+        win.setProgressBar(pct);
+        win.setTitle(`Personal OS — Downloading update ${p}%`);
+      }
+    });
+  } catch (err) {
+    try { fs.unlinkSync(tmpDmg); } catch {}
+    throw new Error(`Download failed: ${err.message}`);
+  }
+
+  if (win && !win.isDestroyed()) { win.setProgressBar(-1); win.setTitle('Personal OS — Installing…'); }
+
+  // ── 2. Mount DMG ───────────────────────────────────────────────────
+  updaterLog('info', '[mac] Mounting DMG…');
+  let mountPoint;
+  try {
+    const out = await execAsync(`hdiutil attach "${tmpDmg}" -nobrowse -noverify -noautoopen -plist`);
+    // Parse plist: find mount-point value
+    const m = out.match(/<key>mount-point<\/key>\s*<string>([^<]+)<\/string>/);
+    if (!m) throw new Error('Could not parse mount point from hdiutil output');
+    mountPoint = m[1].trim();
+    updaterLog('info', `[mac] Mounted at ${mountPoint}`);
+  } catch (err) {
+    try { fs.unlinkSync(tmpDmg); } catch {}
+    throw new Error(`Mount failed: ${err.message}`);
+  }
+
+  // ── 3. Find .app inside DMG ────────────────────────────────────────
+  let appInDmg;
+  try {
+    const entries = fs.readdirSync(mountPoint);
+    const appName = entries.find((e) => e.endsWith('.app'));
+    if (!appName) throw new Error('No .app found in DMG');
+    appInDmg = path.join(mountPoint, appName);
+    updaterLog('info', `[mac] App in DMG: ${appInDmg}`);
+  } catch (err) {
+    await execAsync(`hdiutil detach "${mountPoint}" -quiet -force`).catch(() => {});
+    try { fs.unlinkSync(tmpDmg); } catch {}
+    throw new Error(`Find app failed: ${err.message}`);
+  }
+
+  // Destination: same directory as currently running app
+  const currentBundle = path.normalize(path.join(process.execPath, '../../..'));
+  const appDest       = path.join(path.dirname(currentBundle), path.basename(appInDmg));
+  updaterLog('info', `[mac] Installing to ${appDest}`);
+
+  // ── 4. Copy with ditto (preserves macOS metadata) ─────────────────
+  try {
+    await execAsync(`ditto "${appInDmg}" "${appDest}"`);
+    updaterLog('info', '[mac] ditto copy done');
+  } catch (err) {
+    await execAsync(`hdiutil detach "${mountPoint}" -quiet -force`).catch(() => {});
+    try { fs.unlinkSync(tmpDmg); } catch {}
+    throw new Error(`Copy failed: ${err.message}`);
+  }
+
+  // ── 5. Strip quarantine (just in case) ────────────────────────────
+  await execAsync(`xattr -rd com.apple.quarantine "${appDest}"`).catch(() => {});
+
+  // ── 6. Unmount + cleanup ───────────────────────────────────────────
+  await execAsync(`hdiutil detach "${mountPoint}" -quiet -force`).catch(() => {});
+  try { fs.unlinkSync(tmpDmg); } catch {}
+
+  updaterLog('info', `[mac] Update ${version} installed — prompting restart`);
+
+  if (win && !win.isDestroyed()) { win.setProgressBar(-1); win.setTitle('Personal OS'); }
+
+  // ── 7. Restart dialog ─────────────────────────────────────────────
+  const restartOpts = {
+    type: 'info',
+    title: 'Update Installed',
+    message: `Personal OS ${version} is ready`,
+    detail: 'Restart now to launch the new version.',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  };
+  const choice = win
+    ? dialog.showMessageBoxSync(win, restartOpts)
+    : dialog.showMessageBoxSync(restartOpts);
+
+  updaterLog('info', `[mac] Restart choice: ${choice === 0 ? 'Now' : 'Later'}`);
+  if (choice === 0) { app.relaunch(); app.quit(); }
+}
 
 async function checkForUpdatesMac() {
   updaterLog('info', `[mac] Checking GitHub releases (current: ${app.getVersion()})`);
@@ -368,60 +499,52 @@ async function checkForUpdatesMac() {
       'https://api.github.com/repos/Jeevanrajss/North-OS/releases/latest',
       { headers: { 'User-Agent': 'PersonalOS-Updater' }, signal: AbortSignal.timeout(10_000) },
     );
-    if (!res.ok) {
-      updaterLog('error', `[mac] GitHub API returned ${res.status}`);
-      return;
-    }
+    if (!res.ok) { updaterLog('error', `[mac] GitHub API ${res.status}`); return; }
+
     const release = await res.json();
     const latest  = (release.tag_name ?? '').replace(/^v/, '');
     const current = app.getVersion();
     updaterLog('info', `[mac] latest=${latest} current=${current}`);
 
-    if (!latest || !semverGt(latest, current)) {
-      updaterLog('info', '[mac] Already up to date');
-      return;
-    }
+    if (!latest || !semverGt(latest, current)) { updaterLog('info', '[mac] Already up to date'); return; }
 
     updaterLog('info', `[mac] Update available: ${latest}`);
 
-    // Find the right DMG asset for the running arch
-    const arch  = process.arch; // 'arm64' or 'x64'
+    const arch   = process.arch;
     const assets = release.assets ?? [];
     const dmg    = assets.find((a) => a.name.endsWith('.dmg') && a.name.includes(arch))
-                ?? assets.find((a) => a.name.endsWith('.dmg')); // fallback
+                ?? assets.find((a) => a.name.endsWith('.dmg'));
+
+    if (!dmg) { updaterLog('error', '[mac] No DMG asset found'); return; }
 
     const rawNotes = typeof release.body === 'string'
-      ? release.body.replace(/<[^>]+>/g, '').trim().slice(0, 600)
-      : '';
+      ? release.body.replace(/<[^>]+>/g, '').trim().slice(0, 500) : '';
 
-    const detail = [
-      `You have ${current}. Click Download to get ${latest}.`,
-      rawNotes ? `\nWhat's new:\n${rawNotes}` : '',
-      '\nThe app will open the download page — drag the new version to Applications to install.',
-    ].filter(Boolean).join('');
-
-    const win  = getActiveWindow();
-    const opts = {
-      type: 'info',
-      title: 'Update Available',
+    const win   = getActiveWindow();
+    const opts  = {
+      type: 'info', title: 'Update Available',
       message: `Personal OS ${latest} is available`,
-      detail,
-      buttons: ['Download', 'Later'],
-      defaultId: 0,
-      cancelId:  1,
+      detail: [
+        `You have ${current}.`,
+        rawNotes ? `\nWhat's new:\n${rawNotes}` : '',
+        '\nClick "Install Now" — the app will download, install and restart automatically.',
+      ].filter(Boolean).join(''),
+      buttons: ['Install Now', 'Later'],
+      defaultId: 0, cancelId: 1,
     };
 
-    const choice = win
-      ? dialog.showMessageBoxSync(win, opts)
-      : dialog.showMessageBoxSync(opts);
-
-    updaterLog('info', `[mac] Dialog choice: ${choice === 0 ? 'Download' : 'Later'}`);
+    const choice = win ? dialog.showMessageBoxSync(win, opts) : dialog.showMessageBoxSync(opts);
+    updaterLog('info', `[mac] Dialog choice: ${choice === 0 ? 'Install Now' : 'Later'}`);
 
     if (choice === 0) {
-      const url = dmg?.browser_download_url
-        ?? `https://github.com/Jeevanrajss/North-OS/releases/tag/v${latest}`;
-      updaterLog('info', `[mac] Opening: ${url}`);
-      shell.openExternal(url);
+      installMacUpdate(dmg.browser_download_url, latest).catch((err) => {
+        updaterLog('error', `[mac] installMacUpdate error: ${err.message}`);
+        const w = getActiveWindow();
+        const errOpts = { type: 'error', title: 'Update Failed',
+          message: `Could not install update: ${err.message}`, buttons: ['OK'] };
+        if (w) dialog.showMessageBox(w, errOpts).catch(() => {});
+        else   dialog.showMessageBox(errOpts).catch(() => {});
+      });
     }
   } catch (err) {
     updaterLog('error', `[mac] checkForUpdatesMac error: ${err?.message ?? err}`);

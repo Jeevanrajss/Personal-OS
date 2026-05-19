@@ -137,6 +137,29 @@ export type SmsTransactionOut = {
   status: 'pending' | 'confirmed' | 'dismissed';
 };
 
+export type SmsDebugThread = {
+  contact: string;
+  sim: string;
+  is_bank: boolean;
+};
+
+export type SmsDebugParseSample = {
+  sender: string;
+  body_preview: string;
+  parsed_ok: boolean;
+  parsed_type?: string;
+  parsed_amount?: number;
+};
+
+export type SmsDebugResult = {
+  error?: string;
+  verdict?: string;
+  threads?: SmsDebugThread[];
+  parse_samples?: SmsDebugParseSample[];
+  encryption_key_set?: boolean;
+  [key: string]: unknown; // allow raw step fields
+};
+
 export type AccountType = 'savings' | 'credit_card' | 'debit_card' | 'wallet' | 'upi' | 'cash';
 
 export type Account = {
@@ -543,13 +566,6 @@ export type UpcomingRenewal = {
   days_until: number;
 };
 
-export type JournalSearchResult = {
-  entry_id: string;
-  day_date: string; // YYYY-MM-DD
-  snippet: string;
-  score: number;
-};
-
 export type SubscriptionStatsResponse = {
   active_count: number;
   monthly_total: number;
@@ -753,11 +769,6 @@ export const api = {
       }),
     summarize: (date: string) =>
       request<Day>(`/journal/days/${date}/summarize`, { method: 'POST' }),
-    search: (query: string, limit = 5) =>
-      request<JournalSearchResult[]>('/journal/search', {
-        method: 'POST',
-        body: JSON.stringify({ query, limit }),
-      }),
     stats: (windowDays = 30) =>
       request<StatsResponse>(`/journal/stats?days=${windowDays}`),
     annual: () =>
@@ -918,11 +929,12 @@ export const api = {
       imessage_db_path: string;
       httpsms_configured: boolean;
       httpsms_last_sync: string | null;
+      httpsms_encryption_enabled?: boolean;
     }>('/sms/status'),
     pending: () => request<SmsTransactionOut[]>('/sms/pending'),
     scanImessage: (daysBack = 7) => request<{ scanned: boolean; new_transactions: number }>(`/sms/scan-imessage?days_back=${daysBack}`, { method: 'POST' }),
-    syncHttpSms: () => request<{ synced: boolean; new_transactions: number; synced_at: string }>('/sms/sync-httpsms', { method: 'POST' }),
-    debug: () => request<Record<string, unknown>>('/sms/debug'),
+    syncHttpSms: () => request<{ synced: boolean; new_transactions: number; messages_checked: number; synced_at: string }>('/sms/sync-httpsms', { method: 'POST' }),
+    debug: () => request<SmsDebugResult>('/sms/debug'),
     confirm: (id: string, category?: string | null) => request<{ status: string; transaction: Transaction }>(`/sms/pending/${id}/confirm`, { method: 'POST', body: JSON.stringify({ category: category ?? null }), headers: { 'Content-Type': 'application/json' } }),
     dismiss: (id: string) => request<{ status: string }>(`/sms/pending/${id}/dismiss`, { method: 'POST' }),
   },

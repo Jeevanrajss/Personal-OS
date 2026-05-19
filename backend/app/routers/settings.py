@@ -14,6 +14,7 @@ from app.schemas.setting import (
 )
 from app.services import llm_client
 from app.services.llm_client import LLMError
+from app.scheduler import reschedule_jobs
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -59,6 +60,14 @@ def update_settings(body: SettingsBulkUpdate, db: Session = Depends(get_db)):
     db.commit()
     # Invalidate LLM client cache so next call reads fresh config
     llm_client.invalidate_config_cache()
+    # Re-apply notification schedule if any timing key changed
+    NOTIF_TIME_KEYS = {
+        "notif.morning_briefing_time",
+        "notif.habit_reminder_time",
+        "notif.sub_alert_time",
+    }
+    if NOTIF_TIME_KEYS & set(body.settings.keys()):
+        reschedule_jobs()
     return {"ok": True}
 
 

@@ -139,6 +139,7 @@ export function MonthlyReportView({ year, month }: Props) {
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [catFilter, setCatFilter] = useState('');
   const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const { data: report, isLoading, isError } = useQuery<MonthlyReport>({
     queryKey: ['finance-report', year, month],
@@ -148,10 +149,11 @@ export function MonthlyReportView({ year, month }: Props) {
 
   async function downloadExport(format: 'csv' | 'pdf') {
     setExporting(format);
+    setExportError(null);
     try {
       const url = api.finance.reportExportUrl(year, month, format);
       const resp = await fetch(url);
-      if (!resp.ok) throw new Error('Export failed');
+      if (!resp.ok) throw new Error(`Export failed (${resp.status})`);
       const blob = await resp.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -159,7 +161,7 @@ export function MonthlyReportView({ year, month }: Props) {
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (e) {
-      console.error(e);
+      setExportError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setExporting(null);
     }
@@ -234,6 +236,16 @@ export function MonthlyReportView({ year, month }: Props) {
           </button>
         </div>
       </div>
+
+      {exportError && (
+        <div style={{
+          padding: '8px 12px', borderRadius: 8, fontSize: 12,
+          background: 'rgba(255,91,110,0.08)', border: '1px solid rgba(255,91,110,0.25)',
+          color: 'var(--accent-red)',
+        }}>
+          {exportError}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}

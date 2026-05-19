@@ -6,6 +6,7 @@ import { SpendingByCategoryCard } from '@/components/subscriptions/SpendingByCat
 import { UpcomingRenewals } from '@/components/subscriptions/UpcomingRenewals';
 import { TrialTrackerCard } from '@/components/subscriptions/TrialTrackerCard';
 import { SubForecastCard } from '@/components/subscriptions/SubForecastCard';
+import { SubInsightsCard } from '@/components/subscriptions/SubInsightsCard';
 import { api, type SubscriptionStatsResponse } from '@/lib/api';
 
 function fmtCurrency(amount: number, currency = 'INR'): string {
@@ -179,6 +180,7 @@ export function Subscriptions() {
           <SubscriptionList />
         </div>
         <aside className="space-y-5">
+          <SubInsightsCard />
           <SpendingByCategoryCard displayCurrency={displayCurrency} />
           <UpcomingRenewals />
           <SubForecastCard />

@@ -7,7 +7,7 @@ import {
   isBiometricAvailable, registerBiometric,
 } from '@/components/LockScreen';
 import { PageHeader } from '@/components/PageHeader';
-import { api, type LLMHealthResult, ProviderPreset, LLMTestResult, type FinanceCategoryOut, type FinanceCategoryIn, type FinanceCategoryType } from '@/lib/api';
+import { api, type LLMHealthResult, ProviderPreset, LLMTestResult, type FinanceCategoryOut, type FinanceCategoryIn, type FinanceCategoryType, type SmsDebugResult } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { CURRENCY_OPTS } from '@/components/subscriptions/subUtils';
 import { MODULE_CONFIGS } from '@/lib/modules';
@@ -561,7 +561,7 @@ function SmsSetupPanel() {
   const [keySaved, setKeySaved] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
-  const [debugData, setDebugData] = useState<Record<string, unknown> | null>(null);
+  const [debugData, setDebugData] = useState<SmsDebugResult | null>(null);
   const [debugging, setDebugging] = useState(false);
 
   // Encryption key state
@@ -612,7 +612,7 @@ function SmsSetupPanel() {
     setSyncMsg('');
     try {
       const res = await api.sms.syncHttpSms();
-      const checked = (res as any).messages_checked ?? 0;
+      const checked = res.messages_checked ?? 0;
       setSyncMsg(res.new_transactions > 0
         ? `✓ ${res.new_transactions} new transaction${res.new_transactions > 1 ? 's' : ''} found (${checked} messages scanned).`
         : `✓ Scanned ${checked} messages — no new transactions.`);
@@ -641,7 +641,7 @@ function SmsSetupPanel() {
   const status = statusQ.data;
   const imAvail = status?.imessage_available ?? false;
   const httpSmsConfigured = status?.httpsms_configured ?? false;
-  const encryptionEnabled = (status as any)?.httpsms_encryption_enabled ?? false;
+  const encryptionEnabled = status?.httpsms_encryption_enabled ?? false;
   const lastSync = status?.httpsms_last_sync;
 
   function fmtLastSync(iso: string | null | undefined) {
@@ -809,16 +809,16 @@ function SmsSetupPanel() {
             {debugData && (
               <div style={{ marginTop: 10 }}>
                 {/* Threads summary */}
-                {Array.isArray((debugData as any).threads) && (
+                {Array.isArray(debugData.threads) && (
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginBottom: 6 }}>
-                      <strong style={{ color: 'var(--fg-2)' }}>{(debugData as any).threads.length}</strong> threads found
+                      <strong style={{ color: 'var(--fg-2)' }}>{debugData.threads.length}</strong> threads found
                       {' · '}<strong style={{ color: 'var(--accent-green)' }}>
-                        {(debugData as any).threads.filter((t: any) => t.is_bank).length}
+                        {debugData.threads.filter((t) => t.is_bank).length}
                       </strong> matched as bank senders
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {(debugData as any).threads.map((t: any, i: number) => (
+                      {debugData.threads.map((t, i) => (
                         <span key={i} style={{
                           fontSize: 11, padding: '3px 8px', borderRadius: 6,
                           background: t.is_bank ? 'rgba(61,255,152,0.10)' : 'var(--surface-elev)',
@@ -833,10 +833,10 @@ function SmsSetupPanel() {
                 )}
 
                 {/* Parse samples */}
-                {Array.isArray((debugData as any).parse_samples) && (debugData as any).parse_samples.length > 0 && (
+                {Array.isArray(debugData.parse_samples) && debugData.parse_samples.length > 0 && (
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginBottom: 6 }}>Sample message parse results:</div>
-                    {(debugData as any).parse_samples.map((s: any, i: number) => (
+                    {debugData.parse_samples.map((s, i) => (
                       <div key={i} style={{
                         padding: '8px 10px', borderRadius: 8, marginBottom: 6,
                         background: 'var(--surface-elev)', border: '1px solid var(--border-subtle)',

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Eye, EyeOff, Loader2, RefreshCw, Wifi } from 'lucide-react';
+import { AlertTriangle, Check, Eye, EyeOff, Loader2, RefreshCw, Trash2, Wifi } from 'lucide-react';
 import {
   getLockHash, setLockHash, clearLockHash, hashLock,
   getBiometricCredId, setBiometricCredId, clearBiometricCredId,
@@ -1843,6 +1843,19 @@ export function Settings() {
     },
   });
 
+  // ── Wipe data state ────────────────────────────────────────────────
+  const [wipeStep, setWipeStep] = useState(0); // 0=closed,1=warn,2=effects,3=confirm
+  const [wipeConfirmText, setWipeConfirmText] = useState('');
+
+  const wipeMut = useMutation({
+    mutationFn: api.data.wipe,
+    onSuccess: () => {
+      qc.invalidateQueries(); // clear all cached query data
+      setWipeStep(0);
+      setWipeConfirmText('');
+    },
+  });
+
   const preset: ProviderPreset | undefined = providers[provider];
   const suggestedChat = [
     ...(preset?.suggested_chat ?? []),
@@ -1885,6 +1898,7 @@ export function Settings() {
             { id: 'modules',       label: 'Modules',       icon: '🧩' },
             { id: 'finance',       label: 'Finance',       icon: '💰' },
             { id: 'privacy',       label: 'Privacy',       icon: '🔒' },
+            { id: 'danger',        label: 'Danger Zone',   icon: '⚠️' },
           ] as const).map(({ id, label, icon }) => (
             <button
               key={id}
@@ -2315,6 +2329,252 @@ export function Settings() {
             <UpdateChecker />
           </div>
         </section>
+
+        {/* ── Danger Zone ──────────────────────────────────────────────── */}
+        <section id="sec-danger" style={{ scrollMarginTop: 88, marginBottom: 56 }}>
+          <SectionHead title="Danger Zone" desc="Irreversible actions. Read carefully before proceeding." />
+
+          <div style={{
+            border: '1px solid rgba(239,68,68,0.35)',
+            borderRadius: 14,
+            overflow: 'hidden',
+          }}>
+            {/* Row */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 16,
+              padding: '18px 22px',
+            }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, font: '500 14px/1.2 var(--font-sans)', color: 'var(--fg-1)' }}>
+                  Wipe all data
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--fg-4)', lineHeight: 1.55 }}>
+                  Once you wipe your data, there is no going back. Please be certain.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWipeStep(1)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '7px 16px', borderRadius: 8,
+                  font: '500 13px/1 var(--font-sans)',
+                  color: '#fca5a5',
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.18)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.1)'; }}
+              >
+                <Trash2 style={{ width: 13, height: 13 }} />
+                Wipe all data
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Wipe data modal (3-step) ──────────────────────────────────── */}
+        {wipeStep > 0 && (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9000,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 24,
+            }}
+            onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 480,
+                background: 'var(--surface-base)',
+                border: '1px solid rgba(239,68,68,0.35)',
+                borderRadius: 16, overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '18px 22px 14px',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}>
+                <AlertTriangle style={{ width: 18, height: 18, color: '#f87171', flexShrink: 0 }} />
+                <span style={{ font: '600 15px/1.2 var(--font-display)', color: 'var(--fg-1)' }}>
+                  {wipeStep === 1 && 'Are you sure?'}
+                  {wipeStep === 2 && 'Understand what will be deleted'}
+                  {wipeStep === 3 && 'Confirm deletion'}
+                </span>
+                {/* Step indicator */}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
+                  {[1, 2, 3].map(s => (
+                    <div key={s} style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: s <= wipeStep ? '#f87171' : 'rgba(255,255,255,0.15)',
+                      transition: 'background 0.2s',
+                    }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '20px 22px 22px' }}>
+                {wipeStep === 1 && (
+                  <>
+                    <p style={{ margin: '0 0 18px', fontSize: 13.5, color: 'var(--fg-3)', lineHeight: 1.65 }}>
+                      You are about to permanently delete <strong style={{ color: 'var(--fg-1)' }}>all your data</strong> from North&nbsp;OS.
+                      This action <strong style={{ color: '#f87171' }}>cannot be undone</strong> — there is no recovery option.
+                    </p>
+                    <p style={{ margin: '0 0 22px', fontSize: 13, color: 'var(--fg-4)', lineHeight: 1.6 }}>
+                      Your AI provider settings and app preferences will be preserved.
+                      Everything else — transactions, habits, journal, subscriptions — will be gone.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+                        style={{
+                          padding: '8px 18px', borderRadius: 8, fontSize: 13,
+                          color: 'var(--fg-3)', background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWipeStep(2)}
+                        style={{
+                          padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                          color: '#fca5a5', background: 'rgba(239,68,68,0.12)',
+                          border: '1px solid rgba(239,68,68,0.4)', cursor: 'pointer',
+                        }}
+                      >
+                        I want to delete all data →
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {wipeStep === 2 && (
+                  <>
+                    <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-4)' }}>
+                      The following data will be <strong style={{ color: '#f87171' }}>permanently deleted</strong>:
+                    </p>
+                    <ul style={{ margin: '0 0 20px', padding: '0 0 0 18px', fontSize: 13, color: 'var(--fg-3)', lineHeight: 2 }}>
+                      <li>All transactions, budgets, and bank accounts</li>
+                      <li>All habits and check-in history</li>
+                      <li>All journal entries and daily summaries</li>
+                      <li>All subscriptions</li>
+                      <li>All SMS-parsed transactions</li>
+                      <li>All notifications</li>
+                      <li>All AI-generated embeddings and vector data</li>
+                    </ul>
+                    <div style={{
+                      padding: '10px 14px', borderRadius: 8, marginBottom: 20,
+                      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                      fontSize: 12.5, color: '#fca5a5', lineHeight: 1.6,
+                    }}>
+                      ✓ Kept: your AI provider settings, profile preferences, and app configuration.
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+                        style={{
+                          padding: '8px 18px', borderRadius: 8, fontSize: 13,
+                          color: 'var(--fg-3)', background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWipeStep(3)}
+                        style={{
+                          padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                          color: '#fca5a5', background: 'rgba(239,68,68,0.12)',
+                          border: '1px solid rgba(239,68,68,0.4)', cursor: 'pointer',
+                        }}
+                      >
+                        I have read and understand these effects →
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {wipeStep === 3 && (
+                  <>
+                    <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--fg-3)', lineHeight: 1.65 }}>
+                      To confirm, type <strong style={{ color: 'var(--fg-1)', fontFamily: 'monospace' }}>delete my data</strong> in the box below.
+                    </p>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={wipeConfirmText}
+                      onChange={e => setWipeConfirmText(e.target.value)}
+                      placeholder="delete my data"
+                      style={{
+                        width: '100%', boxSizing: 'border-box',
+                        padding: '9px 13px', borderRadius: 8, fontSize: 13,
+                        background: 'var(--surface-elev)',
+                        border: wipeConfirmText === 'delete my data'
+                          ? '1px solid rgba(239,68,68,0.6)'
+                          : '1px solid rgba(255,255,255,0.1)',
+                        color: 'var(--fg-1)', outline: 'none',
+                        marginBottom: 20,
+                        fontFamily: 'monospace',
+                        transition: 'border 0.15s',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setWipeStep(0); setWipeConfirmText(''); }}
+                        style={{
+                          padding: '8px 18px', borderRadius: 8, fontSize: 13,
+                          color: 'var(--fg-3)', background: 'transparent',
+                          border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={wipeConfirmText !== 'delete my data' || wipeMut.isPending}
+                        onClick={() => wipeMut.mutate()}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 7,
+                          padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                          color: wipeConfirmText === 'delete my data' ? '#fff' : '#fca5a5',
+                          background: wipeConfirmText === 'delete my data'
+                            ? 'rgba(239,68,68,0.8)' : 'rgba(239,68,68,0.12)',
+                          border: '1px solid rgba(239,68,68,0.5)',
+                          cursor: wipeConfirmText !== 'delete my data' ? 'not-allowed' : 'pointer',
+                          opacity: wipeConfirmText !== 'delete my data' ? 0.6 : 1,
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {wipeMut.isPending
+                          ? <><Loader2 style={{ width: 13, height: 13 }} className="animate-spin" /> Wiping…</>
+                          : <><Trash2 style={{ width: 13, height: 13 }} /> Delete all data</>
+                        }
+                      </button>
+                    </div>
+                    {wipeMut.isError && (
+                      <p style={{ margin: '10px 0 0', fontSize: 12, color: '#f87171' }}>
+                        Something went wrong. Please try again.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>{/* end right content */}
       </div>{/* end settings-grid */}

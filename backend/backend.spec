@@ -90,6 +90,7 @@ a = Analysis(
         "app.routers.import_router",
         "app.routers.sms",
         "app.routers.notifications",
+        "app.routers.data",
         # App services
         "app.services.notification_service",
         "app.services.llm_client",

@@ -978,4 +978,8 @@ export const api = {
     stats: () => request<SubscriptionStatsResponse>('/subscriptions/stats'),
     forecast: () => request<ForecastResponse>('/subscriptions/forecast'),
   },
+
+  data: {
+    wipe: () => request<{ ok: boolean; message: string }>('/data/wipe', { method: 'DELETE' }),
+  },
 };
